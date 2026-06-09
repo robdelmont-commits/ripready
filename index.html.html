@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RipReady — Holding Screen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,600;0,700;0,800;1,700;1,800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --black: #080808;
+  --teal: #00FFD1;
+  --teal-dim: rgba(0,255,209,0.08);
+  --teal-border: rgba(0,255,209,0.2);
+  --surface: #111111;
+  --surface2: #181818;
+  --border: #222222;
+  --text: #ffffff;
+  --text-muted: #777777;
+  --accent: #00FFD1;
+  /* user customizable */
+  --user-accent: #00FFD1;
+  --user-accent-dim: rgba(0,255,209,0.15);
+  --user-accent-border: rgba(0,255,209,0.3);
+}
+
+html, body {
+  background: var(--black);
+  color: var(--text);
+  font-family: 'Barlow', sans-serif;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ── SETUP PANEL (left side) ── */
+#setup {
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  width: 320px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
+  overflow-y: auto;
+}
+
+#setup.hidden {
+  transform: translateX(-320px);
+}
+
+.setup-header {
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.logo-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.logo-mark {
+  width: 32px;
+  height: 32px;
+  background: var(--teal);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.logo-mark svg { width: 20px; height: 20px; display: block; }
+
+.logo-word {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-style: italic;
+  font-weight: 800;
+  font-size: 20px;
+  color: var(--text);
+}
+
+.logo-word span { color: var(--teal); }
+
+.mode-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--black);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 3px;
+}
+
+.mode-btn {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 9px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.18s;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.mode-btn.active {
+  background: var(--user-accent);
+  color: #080808;
+}
+
+.setup-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  flex: 1;
+}
+
+.field-group { display: flex; flex-direction: column; gap: 6px; }
+
+.field-label {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+input[type="text"] {
+  background: var(--black);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+}
+
+input[type="text"]:focus {
+  border-color: var(--user-accent);
+}
+
+input[type="text"]::placeholder { color: #333; }
+
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+input[type="color"] {
+  width: 40px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--black);
+  cursor: pointer;
+  padding: 2px;
+  flex-shrink: 0;
+}
+
+.color-hex {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+}
+
+.logo-upload {
+  background: var(--black);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  position: relative;
+}
+
+.logo-upload:hover { border-color: var(--user-accent); }
+
+.logo-upload input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+}
+
+.upload-icon {
+  font-size: 24px;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+}
+
+.upload-label {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+.logo-preview {
+  width: 100%;
+  max-height: 60px;
+  object-fit: contain;
+  display: none;
+  border-radius: 4px;
+}
+
+.divider {
+  height: 1px;
+  background: var(--border);
+}
+
+.setup-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-fullscreen {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 12px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  background: var(--user-accent);
+  color: #080808;
+  transition: opacity 0.15s;
+  width: 100%;
+}
+
+.btn-fullscreen:hover { opacity: 0.88; }
+
+.btn-hide {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-muted);
+  transition: all 0.15s;
+  width: 100%;
+}
+
+.btn-hide:hover { border-color: var(--text-muted); color: var(--text); }
+
+/* ── SHOW PANEL BUTTON ── */
+#show-panel-btn {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 200;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  display: none;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.15s;
+}
+
+#show-panel-btn:hover { border-color: var(--text-muted); color: var(--text); }
+#show-panel-btn.visible { display: flex; }
+
+/* ── DISPLAY AREA ── */
+#display {
+  position: fixed;
+  top: 0;
+  left: 320px;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #050505;
+  transition: left 0.35s cubic-bezier(0.4,0,0.2,1);
+  overflow: hidden;
+}
+
+#display.expanded { left: 0; }
+
+/* The 9:16 canvas */
+#screen {
+  position: relative;
+  background: var(--black);
+  overflow: hidden;
+  /* sized by JS */
+}
+
+/* ── HOLD MODE ── */
+.hold-bg {
+  position: absolute;
+  inset: 0;
+  background: var(--black);
+}
+
+/* Animated grid lines */
+.grid-lines {
+  position: absolute;
+  inset: 0;
+  opacity: 0.04;
+  background-image:
+    linear-gradient(var(--user-accent) 1px, transparent 1px),
+    linear-gradient(90deg, var(--user-accent) 1px, transparent 1px);
+  background-size: 40px 40px;
+  animation: gridPan 20s linear infinite;
+}
+
+@keyframes gridPan {
+  0% { background-position: 0 0; }
+  100% { background-position: 40px 40px; }
+}
+
+/* Scanning line */
+.scan-line {
+  position: absolute;
+  left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--user-accent), transparent);
+  opacity: 0.3;
+  animation: scanDown 4s ease-in-out infinite;
+}
+
+@keyframes scanDown {
+  0% { top: -2px; opacity: 0; }
+  10% { opacity: 0.3; }
+  90% { opacity: 0.3; }
+  100% { top: 100%; opacity: 0; }
+}
+
+/* Corner accents */
+.corner {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border-color: var(--user-accent);
+  border-style: solid;
+  opacity: 0.5;
+}
+
+.corner.tl { top: 20px; left: 20px; border-width: 2px 0 0 2px; }
+.corner.tr { top: 20px; right: 20px; border-width: 2px 2px 0 0; }
+.corner.bl { bottom: 20px; left: 20px; border-width: 0 0 2px 2px; }
+.corner.br { bottom: 20px; right: 20px; border-width: 0 2px 2px 0; }
+
+/* Logo area */
+.screen-logo-wrap {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -55%);
+  text-align: center;
+  width: 80%;
+}
+
+.screen-logo-img {
+  max-width: 70%;
+  max-height: 140px;
+  object-fit: contain;
+  display: none;
+  margin: 0 auto 20px;
+  background: transparent;
+  mix-blend-mode: screen;
+  animation: logoPulse 3s ease-in-out infinite;
+  border-radius: 50%;
+}
+
+@keyframes logoPulse {
+  0%, 100% { 
+    opacity: 1; 
+    transform: scale(1);
+    box-shadow: 0 0 25px 8px var(--user-accent-dim);
+  }
+  50% { 
+    opacity: 0.93; 
+    transform: scale(1.03);
+    box-shadow: 0 0 50px 18px var(--user-accent-border);
+  }
+}
+
+.screen-logo-glow { display: none; }
+
+
+.screen-show-name {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-style: italic;
+  font-weight: 800;
+  font-size: 52px;
+  color: var(--text);
+  line-height: 1;
+  letter-spacing: -1px;
+  text-shadow: 0 0 40px rgba(0,0,0,0.8);
+  animation: textGlow 3s ease-in-out infinite;
+}
+
+@keyframes textGlow {
+  0%, 100% { text-shadow: 0 0 0 transparent; }
+  50% { text-shadow: 0 0 30px var(--user-accent-dim); }
+}
+
+.screen-tagline {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--user-accent);
+  margin-top: 10px;
+  opacity: 0.85;
+}
+
+/* Starting soon bar */
+.starting-soon {
+  position: absolute;
+  bottom: 80px;
+  left: 0; right: 0;
+  text-align: center;
+}
+
+.starting-label {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--user-accent);
+  opacity: 0.7;
+  animation: blink 2s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 0.25; }
+}
+
+/* Dot indicators */
+.dot-row {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--user-accent);
+  opacity: 0.2;
+  animation: dotPulse 1.5s ease-in-out infinite;
+}
+
+.dot:nth-child(2) { animation-delay: 0.25s; }
+.dot:nth-child(3) { animation-delay: 0.5s; }
+.dot:nth-child(4) { animation-delay: 0.75s; }
+.dot:nth-child(5) { animation-delay: 1s; }
+
+@keyframes dotPulse {
+  0%, 100% { opacity: 0.2; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.4); }
+}
+
+/* Accent bar bottom */
+.accent-bar {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 4px;
+  background: var(--user-accent);
+  opacity: 0.6;
+}
+
+/* RipReady watermark */
+.watermark {
+  position: absolute;
+  bottom: 14px;
+  right: 16px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-style: italic;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--user-accent);
+  opacity: 0.25;
+}
+
+/* ── LIVE MODE ── */
+#screen.live-mode .hold-bg { background: var(--black); }
+#screen.live-mode .grid-lines { opacity: 0.012; animation: none; }
+#screen.live-mode .scan-line { display: none; }
+#screen.live-mode .starting-soon { display: none; }
+#screen.live-mode .screen-logo-wrap { display: none; }
+#screen.live-mode .accent-bar { display: none; }
+#screen.live-mode .corner { opacity: 0.12; }
+#screen.live-mode .watermark { display: none; }
+
+/* ── LIVE BANNER ── */
+.live-banner {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: var(--user-accent);
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#screen.live-mode .live-banner { display: flex; }
+
+/* Top strip: show name left, LIVE badge right */
+.banner-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  height: 36px;
+  background: var(--user-accent);
+  flex-shrink: 0;
+}
+
+.banner-show-name {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-style: italic;
+  font-weight: 800;
+  font-size: 20px;
+  color: #080808;
+  letter-spacing: 0.5px;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.banner-live-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: #cc2200;
+  border-radius: 3px;
+  padding: 3px 8px;
+  flex-shrink: 0;
+}
+
+.banner-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff;
+  animation: livePulse 1s ease-in-out infinite;
+}
+
+.banner-live-text {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+@keyframes livePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+/* Ticker strip below */
+.banner-ticker {
+  background: #080808;
+  height: 28px;
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.banner-ticker-inner {
+  display: flex;
+  white-space: nowrap;
+  position: absolute;
+  top: 0; left: 0;
+  animation: tickerScroll 22s linear infinite;
+  height: 100%;
+  align-items: center;
+}
+
+.banner-ticker-item {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--user-accent);
+  padding: 0 48px 0 0;
+  opacity: 0.85;
+}
+
+@keyframes tickerScroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* hide old ticker and live badge — replaced by banner */
+.ticker-wrap { display: none !important; }
+.live-badge { display: none !important; }
+
+/* ── MODE INDICATOR (on screen) ── */
+.mode-indicator {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--user-accent);
+  opacity: 0.4;
+}
+
+#screen.live-mode .mode-indicator { display: none; }
+</style>
+</head>
+<body>
+
+<!-- Setup Panel -->
+<div id="setup">
+  <div class="setup-header">
+    <div class="logo-row">
+      <div class="logo-mark">
+        <svg viewBox="0 0 20 20" fill="none">
+          <text x="1" y="16" font-family="Barlow Condensed" font-style="italic" font-weight="800" font-size="16" fill="#080808">R</text>
+          <polygon points="11.5,2 8,10 11,10 6.5,19 15.5,8 11,8" fill="#080808" opacity="0.8"/>
+        </svg>
+      </div>
+      <span class="logo-word">Rip<span>Ready</span></span>
+    </div>
+
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="holdBtn" onclick="setMode('hold')">Hold</button>
+      <button class="mode-btn" id="liveBtn" onclick="setMode('live')">Live</button>
+    </div>
+  </div>
+
+  <div class="setup-body">
+
+    <div class="field-group">
+      <label class="field-label">Show Name</label>
+      <input type="text" id="showName" placeholder="Throb Roulette" oninput="updateDisplay()" maxlength="30">
+    </div>
+
+    <div class="field-group">
+      <label class="field-label">Tagline</label>
+      <input type="text" id="tagline" placeholder="Every rip counts" oninput="updateDisplay()" maxlength="40">
+    </div>
+
+    <div class="field-group">
+      <label class="field-label">Ticker Text</label>
+      <input type="text" id="tickerText" placeholder="Welcome to the show — tonight we rip!" oninput="updateTicker()" maxlength="120">
+    </div>
+
+    <div class="field-group">
+      <label class="field-label">Accent Color</label>
+      <div class="color-row">
+        <input type="color" id="accentColor" value="#00FFD1" oninput="updateColor(this.value)">
+        <span class="color-hex" id="colorHex">#00FFD1</span>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="field-group">
+      <label class="field-label">Logo</label>
+      <div class="logo-upload" id="logoUpload">
+        <input type="file" accept="image/*" onchange="handleLogo(this)">
+        <div class="upload-icon">↑</div>
+        <div class="upload-label">Upload logo</div>
+        <img class="logo-preview" id="logoPreview">
+      </div>
+    </div>
+
+  </div>
+
+  <div class="setup-footer">
+    <button class="btn-fullscreen" onclick="goFullscreen()">Full Screen →</button>
+    <button class="btn-hide" onclick="hidePanel()">Hide Panel</button>
+  </div>
+</div>
+
+<!-- Show panel button (when hidden) -->
+<button id="show-panel-btn" onclick="showPanel()">
+  ☰ Setup
+</button>
+
+<!-- Display Area -->
+<div id="display">
+  <div id="screen">
+    <!-- Background -->
+    <div class="hold-bg"></div>
+    <div class="grid-lines"></div>
+    <div class="scan-line"></div>
+
+    <!-- Corners -->
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+
+    <!-- Mode indicator -->
+    <div class="mode-indicator">Pre-Show</div>
+
+    <!-- Logo + name -->
+    <div class="screen-logo-wrap">
+      <div style="position:relative; display:inline-block;">
+        <div class="screen-logo-glow" id="logoGlow"></div>
+        <img class="screen-logo-img" id="screenLogo" src="" alt="">
+      </div>
+      <div class="screen-show-name" id="screenName">Throb Roulette</div>
+      <div class="screen-tagline" id="screenTagline">Every rip counts</div>
+    </div>
+
+    <!-- Starting soon -->
+    <div class="starting-soon">
+      <div class="starting-label">Starting Soon</div>
+      <div class="dot-row">
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+      </div>
+    </div>
+
+    <!-- Live Banner (bottom, live mode only) -->
+    <div class="live-banner">
+      <div class="banner-top">
+        <div class="banner-show-name" id="bannerName">Throb Roulette</div>
+        <div class="banner-live-badge">
+          <div class="banner-live-dot"></div>
+          <span class="banner-live-text">Live</span>
+        </div>
+      </div>
+      <div class="banner-ticker">
+        <div class="banner-ticker-inner">
+          <span class="banner-ticker-item" id="bt1">Welcome to the show — tonight we rip!</span>
+          <span class="banner-ticker-item" id="bt2">Welcome to the show — tonight we rip!</span>
+          <span class="banner-ticker-item" id="bt3">Welcome to the show — tonight we rip!</span>
+          <span class="banner-ticker-item" id="bt4">Welcome to the show — tonight we rip!</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Accent bar (hold mode only) -->
+    <div class="accent-bar"></div>
+
+    <!-- Watermark -->
+    <div class="watermark">RipReady</div>
+  </div>
+</div>
+
+<script>
+  let currentMode = 'hold';
+
+  function sizeScreen() {
+    const display = document.getElementById('display');
+    const screen = document.getElementById('screen');
+    const dw = display.offsetWidth;
+    const dh = display.offsetHeight;
+    const padding = 40;
+    // 9:16
+    let w = dh * (9/16) - padding;
+    let h = dh - padding;
+    if (w > dw - padding) {
+      w = dw - padding;
+      h = w * (16/9);
+    }
+    screen.style.width = Math.round(w) + 'px';
+    screen.style.height = Math.round(h) + 'px';
+    // scale font sizes relative to screen height
+    const scale = h / 800;
+    screen.style.setProperty('--scale', scale);
+    screen.querySelectorAll('.screen-show-name').forEach(el => {
+      el.style.fontSize = Math.round(52 * scale) + 'px';
+    });
+    screen.querySelectorAll('.screen-tagline').forEach(el => {
+      el.style.fontSize = Math.round(18 * scale) + 'px';
+    });
+    if (currentMode === 'live') {
+      document.querySelector('.screen-show-name').style.fontSize = Math.round(38 * scale) + 'px';
+      document.querySelector('.screen-tagline').style.fontSize = Math.round(14 * scale) + 'px';
+    }
+  }
+
+  function setMode(mode) {
+    currentMode = mode;
+    const screen = document.getElementById('screen');
+    const holdBtn = document.getElementById('holdBtn');
+    const liveBtn = document.getElementById('liveBtn');
+    if (mode === 'live') {
+      screen.classList.add('live-mode');
+      liveBtn.classList.add('active');
+      holdBtn.classList.remove('active');
+    } else {
+      screen.classList.remove('live-mode');
+      holdBtn.classList.add('active');
+      liveBtn.classList.remove('active');
+    }
+    sizeScreen();
+  }
+
+  function updateDisplay() {
+    const name = document.getElementById('showName').value || 'Throb Roulette';
+    const tag = document.getElementById('tagline').value || 'Every rip counts';
+    document.getElementById('screenName').textContent = name;
+    document.getElementById('screenTagline').textContent = tag;
+    document.getElementById('bannerName').textContent = name;
+    document.title = 'RipReady — ' + name;
+  }
+
+  function updateColor(hex) {
+    document.getElementById('colorHex').textContent = hex;
+    const r = parseInt(hex.slice(1,3),16);
+    const g = parseInt(hex.slice(3,5),16);
+    const b = parseInt(hex.slice(5,7),16);
+    document.documentElement.style.setProperty('--user-accent', hex);
+    document.documentElement.style.setProperty('--user-accent-dim', `rgba(${r},${g},${b},0.15)`);
+    document.documentElement.style.setProperty('--user-accent-border', `rgba(${r},${g},${b},0.3)`);
+  }
+
+  function updateTicker() {
+    const text = document.getElementById('tickerText').value || 'Welcome to the show — tonight we rip!';
+    ['bt1','bt2','bt3','bt4'].forEach(id => {
+      document.getElementById(id).textContent = text;
+    });
+  }
+
+  function handleLogo(input) {
+    if (!input.files || !input.files[0]) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const preview = document.getElementById('logoPreview');
+      const screenLogo = document.getElementById('screenLogo');
+      const logoGlow = document.getElementById('logoGlow');
+      const uploadIcon = document.querySelector('.upload-icon');
+      const uploadLabel = document.querySelector('.upload-label');
+      preview.src = e.target.result;
+      preview.style.display = 'block';
+      screenLogo.src = e.target.result;
+      screenLogo.style.display = 'block';
+      logoGlow.style.display = 'block';
+      uploadIcon.style.display = 'none';
+      uploadLabel.style.display = 'none';
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+
+  function goFullscreen() {
+    const el = document.documentElement;
+    if (el.requestFullscreen) el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    hidePanel();
+  }
+
+  function hidePanel() {
+    document.getElementById('setup').classList.add('hidden');
+    document.getElementById('display').classList.add('expanded');
+    document.getElementById('show-panel-btn').classList.add('visible');
+    setTimeout(sizeScreen, 360);
+  }
+
+  function showPanel() {
+    document.getElementById('setup').classList.remove('hidden');
+    document.getElementById('display').classList.remove('expanded');
+    document.getElementById('show-panel-btn').classList.remove('visible');
+    setTimeout(sizeScreen, 360);
+  }
+
+  // Exit fullscreen on Escape already handled by browser
+  // Double-click display to hide/show panel
+  document.getElementById('display').addEventListener('dblclick', () => {
+    const setup = document.getElementById('setup');
+    if (setup.classList.contains('hidden')) showPanel();
+    else hidePanel();
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    if (e.key === 'h' || e.key === 'H') setMode('hold');
+    if (e.key === 'l' || e.key === 'L') setMode('live');
+    if (e.key === 'f' || e.key === 'F') goFullscreen();
+    if (e.key === 'Escape') showPanel();
+  });
+
+  window.addEventListener('resize', sizeScreen);
+  window.addEventListener('load', sizeScreen);
+</script>
+</body>
+</html>
