@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- saved from url=(0058)file:///C:/Users/robde/Downloads/ripready_whip_core_1.html -->
+<!-- saved from url=(0058)file:///C:/Users/robde/Downloads/ripready_whip_core_3.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -554,7 +554,7 @@
     <!-- LOG -->
     <div class="panel-section" style="padding-bottom:0; flex:1; display:flex; flex-direction:column; min-height:0;">
       <div class="section-label">Console</div>
-      <div class="log-pane" id="logPane"><div class="log-entry info"><span class="log-time">15:34:02</span>RipReady Stream Studio initializing…</div><div class="log-entry info"><span class="log-time">15:34:02</span>WebRTC supported ✓</div><div class="log-entry success"><span class="log-time">15:34:04</span>Found 1 camera(s), 1 mic(s)</div><div class="log-entry info"><span class="log-time">15:34:04</span>Ready — start camera preview to begin</div></div>
+      <div class="log-pane" id="logPane"><div class="log-entry info"><span class="log-time">15:43:37</span>RipReady Stream Studio initializing…</div><div class="log-entry info"><span class="log-time">15:43:37</span>WebRTC supported ✓</div><div class="log-entry success"><span class="log-time">15:43:39</span>Found 1 camera(s), 1 mic(s)</div><div class="log-entry info"><span class="log-time">15:43:39</span>Ready — start camera preview to begin</div></div>
     </div>
 
   </div>
@@ -719,7 +719,17 @@ async function handleStreamButton() {
 
 async function startStream() {
   if (!localStream) { log('No camera stream', 'error'); return; }
-  if (!bearerToken) { log('No bearer token', 'error'); return; }
+
+  // Always read token fresh from the textarea at the moment of streaming
+  const tokenEl = document.getElementById('tokenInput');
+  if (tokenEl && tokenEl.value.trim().length > 20) {
+    bearerToken = tokenEl.value.trim();
+  }
+  log(`Token at stream time: ${bearerToken.length} chars`, bearerToken.length > 20 ? 'success' : 'error');
+  if (!bearerToken || bearerToken.length < 20) {
+    log('No token — paste your Whatnot bearer token first', 'error');
+    return;
+  }
 
   const server = document.getElementById('whipServer').value.trim();
   if (!server) { log('No WHIP server URL', 'error'); return; }
