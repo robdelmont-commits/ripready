@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<!-- saved from url=(0058)file:///C:/Users/robde/Downloads/ripready_whip_core_3.html -->
-<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-
+<html lang="en">
+<head>
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>RipReady — Stream Studio</title>
-<link rel="preconnect" href="https://fonts.googleapis.com/">
-<link href="./RipReady — Stream Studio_files/css2" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #080808;
@@ -473,10 +473,10 @@
   <!-- VIDEO PANE -->
   <div class="video-pane">
     <div class="video-wrap">
-      <video id="preview" autoplay="" muted="" playsinline=""></video>
+      <video id="preview" autoplay muted playsinline></video>
       <div class="video-empty" id="videoEmpty">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"></path>
+          <path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
         </svg>
         <p>Camera off</p>
       </div>
@@ -512,11 +512,11 @@
       <div class="device-row">
         <div class="device-select-wrap">
           <label>Camera</label>
-          <select id="camSelect"><option value="">Camera 1</option></select>
+          <select id="camSelect"><option>Loading cameras…</option></select>
         </div>
         <div class="device-select-wrap">
           <label>Microphone</label>
-          <select id="micSelect"><option value="">Microphone 1</option></select>
+          <select id="micSelect"><option>Loading mics…</option></select>
         </div>
         <button class="btn-camera" id="btnCamera" onclick="toggleCamera()">Start Camera Preview</button>
       </div>
@@ -528,7 +528,7 @@
       <div class="field-row">
         <div class="field-wrap">
           <label>WHIP Server</label>
-          <input type="url" id="whipServer" value="https://global.whip.live-video.net" placeholder="https://global.whip.live-video.net">
+          <input type="url" id="whipServer" value="https://global.whip.live-video.net" placeholder="https://global.whip.live-video.net"/>
         </div>
         <div class="field-wrap">
           <label>Bearer Token — paste from Whatnot Show Tools</label>
@@ -543,7 +543,7 @@
 
     <!-- STREAM CONTROLS -->
     <div class="stream-controls">
-      <button class="btn-go-live ready" id="btnGoLive" onclick="handleStreamButton()" disabled="">
+      <button class="btn-go-live ready" id="btnGoLive" onclick="handleStreamButton()" disabled>
         Go Live
       </button>
       <button class="btn-camera" id="btnMute" onclick="toggleMute()" style="display:none">
@@ -554,7 +554,7 @@
     <!-- LOG -->
     <div class="panel-section" style="padding-bottom:0; flex:1; display:flex; flex-direction:column; min-height:0;">
       <div class="section-label">Console</div>
-      <div class="log-pane" id="logPane"><div class="log-entry info"><span class="log-time">15:43:37</span>RipReady Stream Studio initializing…</div><div class="log-entry info"><span class="log-time">15:43:37</span>WebRTC supported ✓</div><div class="log-entry success"><span class="log-time">15:43:39</span>Found 1 camera(s), 1 mic(s)</div><div class="log-entry info"><span class="log-time">15:43:39</span>Ready — start camera preview to begin</div></div>
+      <div class="log-pane" id="logPane"></div>
     </div>
 
   </div>
@@ -932,6 +932,5 @@ function toggleMute() {
   log('Ready — start camera preview to begin', 'info');
 })();
 </script>
-
-
-</body></html>
+</body>
+</html>
