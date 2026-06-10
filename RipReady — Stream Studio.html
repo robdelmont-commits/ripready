@@ -785,13 +785,14 @@ async function startStream() {
     await waitForICE(pc);
     log('ICE gathering complete');
 
-    // WHIP HTTP POST
-    log(`POSTing to: ${server}`);
-    const response = await fetch(server, {
+   // WHIP HTTP POST via relay
+    log(`POSTing via relay → ${server}`);
+    const response = await fetch('/api/whip-relay', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/sdp',
-        'Authorization': `Bearer ${bearerToken}`
+        'Authorization': `Bearer ${bearerToken}`,
+        'X-Whip-Url': server
       },
       body: pc.localDescription.sdp
     });
