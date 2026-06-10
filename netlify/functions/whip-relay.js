@@ -1,5 +1,5 @@
-export default async (request, context) => {
-  if (request.method === 'OPTIONS') {
+export default async (req, context) => {
+  if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
       headers: {
@@ -10,26 +10,36 @@ export default async (request, context) => {
     });
   }
 
-  if (request.method !== 'POST') {
+  if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
   }
 
   try {
-    const whipUrl = request.headers.get('X-Whip-Url');
-    const authorization = request.headers.get('Authorization');
-    const sdpBody = await request.text();
+    const whipUrl = req.headers.get('X-Whip-Url');
+    const authorization = req.headers.get('Authorization');
+    const sdpBody = await req.text();
+
+    console.log('[whip-relay] whipUrl:', whipUrl);
+    console.log('[whip-relay] auth present:', !!authorization);
+    console.log('[whip-relay] auth length:', authorization?.length);
+    console.log('[whip-relay] sdp length:', sdpBody?.length);
 
     if (!whipUrl) {
-      return new Response('Missing X-Whip-Url header', { status: 400 });
+      return new Response(JSON.stringify({ error: 'Missing X-Whip-Url header' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
     }
 
-    // Log what we received for debugging
-    console.log('RELAY: whipUrl =', whipUrl);
-    console.log('RELAY: auth present =', !!authorization);
-    console.log('RELAY: auth length =', authorization?.length);
-    console.log('RELAY: sdp length =', sdpBody?.length);
+    if (!authorization) {
+      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
+    }
 
-    // Step 1: probe for redirect without sending body
+    // Step 1: POST to global endpoint with redirect:manual to catch 307
+    console.log('[whip-relay] Step 1: probing', whipUrl);
     const probe = await fetch(whipUrl, {
       method: 'POST',
       headers: {
@@ -40,41 +50,57 @@ export default async (request, context) => {
       redirect: 'manual',
     });
 
-    console.log('RELAY: probe status =', probe.status);
+    console.log('[whip-relay] probe status:', probe.status);
 
-    let targetUrl = whipUrl;
-    if (probe.status === 307 || probe.status === 301 || probe.status === 302) {
-      const location = probe.headers.get('location') || probe.headers.get('Location');
-      console.log('RELAY: redirect location =', location);
-      if (location) {
-        targetUrl = location;
-      }
-    } else if (probe.ok) {
-      // No redirect needed, probe response IS the answer
+    // If we got a success directly (no redirect needed)
+    if (probe.status >= 200 && probe.status < 300) {
       const responseBody = await probe.text();
-      console.log('RELAY: direct response, status =', probe.status);
+      console.log('[whip-relay] direct success, body length:', responseBody.length);
       return new Response(responseBody, {
         status: probe.status,
         headers: {
           'Content-Type': probe.headers.get('Content-Type') || 'application/sdp',
           'Access-Control-Allow-Origin': '*',
+          'Access-Control-Expose-Headers': 'Location, Link',
+          'Location': probe.headers.get('Location') || '',
+          'Link': probe.headers.get('Link') || '',
         }
       });
+    }
+
+    // Handle redirect
+    let targetUrl = whipUrl;
+    if (probe.status === 307 || probe.status === 301 || probe.status === 302) {
+      // Try both lowercase and uppercase Location header
+      const location = probe.headers.get('location') || probe.headers.get('Location');
+      console.log('[whip-relay] redirect to:', location);
+      if (location) {
+        targetUrl = location;
+      } else {
+        // Log all headers for debugging
+        const headerEntries = [];
+        probe.headers.forEach((v, k) => headerEntries.push(`${k}: ${v}`));
+        console.log('[whip-relay] all response headers:', headerEntries.join(', '));
+        return new Response(JSON.stringify({ error: 'Redirect with no Location header', headers: headerEntries }), {
+          status: 502,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        });
+      }
     } else {
-      // Error on first attempt
+      // Non-redirect error from probe
       const errorBody = await probe.text();
-      console.log('RELAY: probe error body =', errorBody);
+      console.log('[whip-relay] probe error:', probe.status, errorBody);
       return new Response(errorBody, {
         status: probe.status,
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': probe.headers.get('Content-Type') || 'application/json',
           'Access-Control-Allow-Origin': '*',
         }
       });
     }
 
-    // Step 2: POST directly to the resolved URL
-    console.log('RELAY: posting to resolved URL =', targetUrl);
+    // Step 2: POST directly to resolved regional URL
+    console.log('[whip-relay] Step 2: posting to resolved URL:', targetUrl);
     const response = await fetch(targetUrl, {
       method: 'POST',
       headers: {
@@ -86,8 +112,8 @@ export default async (request, context) => {
     });
 
     const responseBody = await response.text();
-    console.log('RELAY: final status =', response.status);
-    console.log('RELAY: final body =', responseBody.substring(0, 200));
+    console.log('[whip-relay] final status:', response.status);
+    console.log('[whip-relay] final body:', responseBody.substring(0, 300));
 
     return new Response(responseBody, {
       status: response.status,
@@ -101,8 +127,11 @@ export default async (request, context) => {
     });
 
   } catch (err) {
-    console.error('RELAY error:', err);
-    return new Response(`Relay error: ${err.message}`, { status: 500 });
+    console.error('[whip-relay] caught error:', err.message);
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+    });
   }
 };
 
