@@ -1,5 +1,4 @@
 export default async (request, context) => {
-  // Handle CORS preflight
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -24,8 +23,13 @@ export default async (request, context) => {
       return new Response('Missing X-Whip-Url header', { status: 400 });
     }
 
-    // Step 1: POST to global endpoint, follow redirect manually
-    let targetUrl = whipUrl;
+    // Log what we received for debugging
+    console.log('RELAY: whipUrl =', whipUrl);
+    console.log('RELAY: auth present =', !!authorization);
+    console.log('RELAY: auth length =', authorization?.length);
+    console.log('RELAY: sdp length =', sdpBody?.length);
+
+    // Step 1: probe for redirect without sending body
     const probe = await fetch(whipUrl, {
       method: 'POST',
       headers: {
@@ -36,15 +40,41 @@ export default async (request, context) => {
       redirect: 'manual',
     });
 
-    // If redirected, re-POST to the Location URL
+    console.log('RELAY: probe status =', probe.status);
+
+    let targetUrl = whipUrl;
     if (probe.status === 307 || probe.status === 301 || probe.status === 302) {
-      targetUrl = probe.headers.get('Location');
-      if (!targetUrl) {
-        return new Response('Redirect with no Location', { status: 502 });
+      const location = probe.headers.get('location') || probe.headers.get('Location');
+      console.log('RELAY: redirect location =', location);
+      if (location) {
+        targetUrl = location;
       }
+    } else if (probe.ok) {
+      // No redirect needed, probe response IS the answer
+      const responseBody = await probe.text();
+      console.log('RELAY: direct response, status =', probe.status);
+      return new Response(responseBody, {
+        status: probe.status,
+        headers: {
+          'Content-Type': probe.headers.get('Content-Type') || 'application/sdp',
+          'Access-Control-Allow-Origin': '*',
+        }
+      });
+    } else {
+      // Error on first attempt
+      const errorBody = await probe.text();
+      console.log('RELAY: probe error body =', errorBody);
+      return new Response(errorBody, {
+        status: probe.status,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        }
+      });
     }
 
-    // Final POST to the real endpoint
+    // Step 2: POST directly to the resolved URL
+    console.log('RELAY: posting to resolved URL =', targetUrl);
     const response = await fetch(targetUrl, {
       method: 'POST',
       headers: {
@@ -56,6 +86,8 @@ export default async (request, context) => {
     });
 
     const responseBody = await response.text();
+    console.log('RELAY: final status =', response.status);
+    console.log('RELAY: final body =', responseBody.substring(0, 200));
 
     return new Response(responseBody, {
       status: response.status,
@@ -69,6 +101,7 @@ export default async (request, context) => {
     });
 
   } catch (err) {
+    console.error('RELAY error:', err);
     return new Response(`Relay error: ${err.message}`, { status: 500 });
   }
 };
