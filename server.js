@@ -120,3 +120,6 @@ async function saveToken(token) {
 }
 
 server.listen(PORT, () => console.log(`[RipReady] Relay running on port ${PORT}`));
+process.on("SIGTERM", () => {
+  server.close(() => process.exit(0));
+});
