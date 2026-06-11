@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "RipReady — Whatnot Stream Bridge",
+  "version": "1.0.0",
+  "description": "Connects your Whatnot show to RipReady. No OBS required.",
+  "permissions": [
+    "tabs",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.whatnot.com/*",
+    "https://ripready.app/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.whatnot.com/*"],
+      "js": ["inject-loader.js", "content-bridge.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["injected.js"],
+      "matches": ["https://www.whatnot.com/*"]
+    }
+  ],
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "action": {
+    "default_title": "RipReady",
+    "default_popup": "popup.html"
+  }
+}
