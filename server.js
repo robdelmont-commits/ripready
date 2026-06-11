@@ -30,6 +30,7 @@ wss.on("connection", (ws) => {
 
     const op = msg?.op;
     const d = msg?.d;
+    console.log("[RipReady] Message received:", JSON.stringify(msg));
 
     // op:1 = Identify — reply with Identified (op:2)
     if (op === 1) {
