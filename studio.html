@@ -1089,7 +1089,42 @@ function toggleOverlay(id) {
   var tog = document.getElementById('tog-'+id);
   tog.classList.toggle('on');
 }
+// — TOKEN POLLING —
+const SUPABASE_URL = "https://lomcfdnjyoujtwbuvexb.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_7YeKPKx74Iyilkf3pyMCkg_N54wLHvb";
+let tokenPollInterval = null;
+let lastTokenId = null;
 
+function startTokenPolling() {
+  if (tokenPollInterval) return;
+  console.log("[RipReady] Token polling started");
+  tokenPollInterval = setInterval(async function() {
+    try {
+      var res = await fetch(
+        SUPABASE_URL + "/rest/v1/tokens?select=id,bearer_token,created_at&order=created_at.desc&limit=1",
+        { headers: { apikey: SUPABASE_ANON_KEY, Authorization: "Bearer " + SUPABASE_ANON_KEY } }
+      );
+      if (!res.ok) return;
+      var rows = await res.json();
+      if (!rows.length) return;
+      var latest = rows[0];
+      if (latest.id !== lastTokenId) {
+        lastTokenId = latest.id;
+        var input = document.getElementById("tokenInput");
+        input.value = latest.bearer_token;
+        input.dispatchEvent(new Event("input"));
+        console.log("[RipReady] Token received from relay");
+        stopTokenPolling();
+      }
+    } catch(e) {
+      console.warn("[RipReady] Poll error:", e.message);
+    }
+  }, 3000);
+}
+
+function stopTokenPolling() {
+  if (tokenPollInterval) { clearInterval(tokenPollInterval); tokenPollInterval = null; }
+}
 // ── SHOW NAME SYNC ──
 document.addEventListener('DOMContentLoaded', function(){
   document.getElementById('showNameInput').addEventListener('input', function(){
@@ -1100,6 +1135,7 @@ document.addEventListener('DOMContentLoaded', function(){
   // Start on holding screen
   setView('holding');
   setStatus('holding');
+  startTokenPolling();
 });
 
 function showError(msg) {
