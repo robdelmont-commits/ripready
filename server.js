@@ -47,11 +47,40 @@ server.on("upgrade", (req, socket, head) => {
       sendFrame(socket, JSON.stringify({ op: 2, d: { negotiatedRpcVersion: 1 } }));
     }
 
-    if (op === 6) {
+if (op === 6) {
       const { requestType, requestId, requestData } = d;
+
+      let responseData = {};
+
+      if (requestType === "GetOutputList") {
+        responseData = {
+          outputs: [{
+            outputName: "simple_stream",
+            outputKind: "rtmp_output",
+            outputWidth: 1280,
+            outputHeight: 720,
+            outputActive: false,
+            outputFlags: { OBS_OUTPUT_AUDIO: true, OBS_OUTPUT_VIDEO: true }
+          }]
+        };
+      }
+
+      if (requestType === "GetStreamStatus") {
+        responseData = {
+          outputActive: false,
+          outputReconnecting: false,
+          outputTimecode: "00:00:00.000",
+          outputDuration: 0,
+          outputCongestion: 0,
+          outputBytes: 0,
+          outputSkippedFrames: 0,
+          outputTotalFrames: 0
+        };
+      }
+
       sendFrame(socket, JSON.stringify({
         op: 7,
-        d: { requestType, requestId, requestStatus: { result: true, code: 100 } }
+        d: { requestType, requestId, requestStatus: { result: true, code: 100 }, responseData }
       }));
       if (requestType === "SetStreamServiceSettings") {
         const token = requestData?.streamServiceSettings?.bearer_token;
