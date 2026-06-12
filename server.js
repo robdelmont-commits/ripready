@@ -47,7 +47,7 @@ server.on("upgrade", (req, socket, head) => {
       sendFrame(socket, JSON.stringify({ op: 2, d: { negotiatedRpcVersion: 1 } }));
     }
 
-if (op === 6) {
+    if (op === 6) {
       const { requestType, requestId, requestData } = d;
 
       let responseData = {};
@@ -78,10 +78,40 @@ if (op === 6) {
         };
       }
 
+      if (requestType === "GetProfileList") {
+        responseData = {
+          currentProfileName: "RipReady",
+          profiles: ["RipReady"]
+        };
+      }
+
+      if (requestType === "GetVideoSettings") {
+        responseData = {
+          fpsNumerator: 30,
+          fpsDenominator: 1,
+          baseWidth: 1080,
+          baseHeight: 1920,
+          outputWidth: 1080,
+          outputHeight: 1920
+        };
+      }
+
+      if (requestType === "GetStreamServiceSettings") {
+        responseData = {
+          streamServiceType: "whip_custom",
+          streamServiceSettings: {
+            server: "https://global.whip.live-video.net",
+            bearer_token: "",
+            service: "WHIP"
+          }
+        };
+      }
+
       sendFrame(socket, JSON.stringify({
         op: 7,
         d: { requestType, requestId, requestStatus: { result: true, code: 100 }, responseData }
       }));
+
       if (requestType === "SetStreamServiceSettings") {
         const token = requestData?.streamServiceSettings?.bearer_token;
         if (token) {
