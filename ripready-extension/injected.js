@@ -3,7 +3,7 @@
 // Rewrites ws://127.0.0.1:4455 → wss://lomcfdnjyoujtwbuvexb.supabase.co/functions/v1/obs-relay
 
 (function () {
-  const RELAY_URL = "wss://lomcfdnjyoujtwbuvexb.supabase.co/functions/v1/obs-relay";
+  const RELAY_URL = "wss://ripready-production.up.railway.app";
   const TARGET = "ws://127.0.0.1:4455";
 
   const OriginalWebSocket = window.WebSocket;
