@@ -6,6 +6,7 @@
 <title>RipReady Studio</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<script src="https://web-broadcast.live-video.net/1.33.0/amazon-ivs-web-broadcast.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -789,6 +790,7 @@ var state = {
   timerInterval: null,
   timerSeconds: 0,
   peerConnection: null,
+  ivsStage: null,
   mediaStream: null,
   autoTriggerPending: false,
 };
@@ -929,84 +931,83 @@ function checkGoLive() {
   document.getElementById('goLiveBtn').disabled = !ready;
 }
 
-// ── STREAMING ──
-async function whipPost(whipUrl, sdp) {
-  // Build URL list: named endpoint first, then numeric IP fallback
-  var urls = [whipUrl];
-  if (!whipUrl.endsWith('/whip')) urls.push(whipUrl.replace(/\/$/, '') + '/whip');
-  if (state.whipNumericFallback && !urls.includes(state.whipNumericFallback)) {
-    urls.push(state.whipNumericFallback);
-  }
-  for (var i = 0; i < urls.length; i++) {
-    var url = urls[i];
-    console.log('[RipReady] Trying WHIP URL (' + (i+1) + '/' + urls.length + '):', url);
-    var resp = await fetch('/api/whip-relay', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/sdp',
-        'Authorization': 'Bearer ' + state.token,
-        'X-Whip-Url': url
-      },
-      body: sdp
-    });
-    console.log('[RipReady] WHIP response:', resp.status, url);
-    if (resp.ok) {
-      console.log('[RipReady] SUCCESS with URL:', url);
-      return resp;
-    }
-    var txt = await resp.text();
-    console.warn('[RipReady] WHIP attempt failed:', resp.status, txt, 'url:', url);
-    if (i < urls.length - 1) console.log('[RipReady] Trying next URL...');
-    else throw new Error('Stream failed (' + resp.status + '): ' + txt);
-  }
-}
-
+// ── STREAMING — IVS Web Broadcast SDK ──
 async function goLive() {
   if (!state.token || !state.mediaStream) return;
-  if (state.streaming) return; // already live
+  if (state.streaming) return;
   setStatus('connecting');
   showError('');
-  console.log('[RipReady] goLive() called — token length:', state.token.length);
+  console.log('[RipReady] goLive() via IVS SDK — token length:', state.token.length);
   try {
-    var server = document.getElementById('whipServer').value.trim() || 'https://global.whip.live-video.net';
-    if (state.peerConnection) { state.peerConnection.close(); state.peerConnection = null; }
-    state.peerConnection = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    // Clean up any existing stage
+    if (state.ivsStage) {
+      try { await state.ivsStage.leave(); } catch(e) {}
+      state.ivsStage = null;
+    }
+
+    var { Stage, LocalStageStream, SubscribeType, StageEvents } = IVSBroadcastClient;
+
+    // Build streams from existing mediaStream
+    var videoTrack = state.mediaStream.getVideoTracks()[0];
+    var audioTrack = state.mediaStream.getAudioTracks()[0];
+    var cameraStream = videoTrack ? new LocalStageStream(videoTrack) : null;
+    var micStream = audioTrack ? new LocalStageStream(audioTrack) : null;
+
+    // Strategy — publish only, no subscribe needed for solo streaming
+    var strategy = {
+      stageStreamsToPublish: function() {
+        var streams = [];
+        if (cameraStream) streams.push(cameraStream);
+        if (micStream) streams.push(micStream);
+        return streams;
+      },
+      shouldPublishParticipant: function(participant) { return true; },
+      shouldSubscribeToParticipant: function(participant) { return SubscribeType.NONE; }
+    };
+
+    state.ivsStage = new Stage(state.token, strategy);
+
+    state.ivsStage.on(StageEvents.STAGE_CONNECTION_STATE_CHANGED, function(s) {
+      console.log('[RipReady] IVS Stage state:', s);
     });
-    state.mediaStream.getTracks().forEach(function(t) {
-      state.peerConnection.addTrack(t, state.mediaStream);
+
+    state.ivsStage.on(StageEvents.STAGE_LEFT, function() {
+      console.log('[RipReady] IVS Stage left');
+      if (state.streaming) {
+        setStatus('offline');
+        stopTimer();
+        document.getElementById('goLiveBtn').style.display = 'flex';
+        document.getElementById('endBtn').style.display = 'none';
+        state.streaming = false;
+      }
     });
-    var offer = await state.peerConnection.createOffer();
-    await state.peerConnection.setLocalDescription(offer);
-    // Wait for ICE gathering (max 4s)
-    await new Promise(function(resolve) {
-      if (state.peerConnection.iceGatheringState === 'complete') { resolve(); return; }
-      state.peerConnection.addEventListener('icegatheringstatechange', function() {
-        if (state.peerConnection.iceGatheringState === 'complete') resolve();
-      });
-      setTimeout(resolve, 4000);
+
+    state.ivsStage.on(StageEvents.STAGE_PARTICIPANT_PUBLISH_STATE_CHANGED, function(participant, pubState) {
+      console.log('[RipReady] Publish state:', pubState, participant.isLocal);
+      if (participant.isLocal && pubState === 'PUBLISHED') {
+        console.log('[RipReady] LOCAL PUBLISH CONFIRMED — we are live!');
+        setStatus('live');
+        startTimer();
+        document.getElementById('goLiveBtn').style.display = 'none';
+        document.getElementById('endBtn').style.display = 'block';
+        setView('camera');
+      }
     });
-    var sdp = state.peerConnection.localDescription.sdp;
-    var resp = await whipPost(server, sdp);
-    var answer = await resp.text();
-    await state.peerConnection.setRemoteDescription({ type: 'answer', sdp: answer });
-    setStatus('live');
-    startTimer();
-    document.getElementById('goLiveBtn').style.display = 'none';
-    document.getElementById('endBtn').style.display = 'block';
-    setView('camera');
+
+    await state.ivsStage.join();
+    console.log('[RipReady] IVS Stage joined — waiting for publish confirmation');
+
   } catch(e) {
     console.error('[RipReady] goLive error:', e);
     setStatus('offline');
-    if (state.peerConnection) { state.peerConnection.close(); state.peerConnection = null; }
     showError(e.message || 'Stream failed. Check your token and connection.');
   }
 }
 
-function endStream() {
-  if(state.peerConnection) {
-    state.peerConnection.close();
-    state.peerConnection = null;
+async function endStream() {
+  if (state.ivsStage) {
+    try { await state.ivsStage.leave(); } catch(e) {}
+    state.ivsStage = null;
   }
   setStatus('offline');
   stopTimer();
