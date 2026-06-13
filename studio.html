@@ -1113,6 +1113,15 @@ function startTokenPolling() {
         var input = document.getElementById("tokenInput");
         input.value = latest.bearer_token;
         input.dispatchEvent(new Event("input"));
+        // Extract whip_url from JWT payload
+        try {
+          var parts = latest.bearer_token.split(".");
+          var payload = JSON.parse(atob(parts[1]));
+          if (payload.whip_url) {
+            document.getElementById("whipServer").value = payload.whip_url;
+            console.log("[RipReady] WHIP URL extracted:", payload.whip_url);
+          }
+        } catch(e) { console.warn("[RipReady] JWT decode error:", e.message); }
         console.log("[RipReady] Token received from relay");
         stopTokenPolling();
       }
