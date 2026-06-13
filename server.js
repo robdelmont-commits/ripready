@@ -38,93 +38,118 @@ server.on("upgrade", (req, socket, head) => {
     if (!msg) return;
     let parsed;
     try { parsed = JSON.parse(msg); } catch { return; }
-    console.log("[RipReady] Message:", JSON.stringify(parsed));
+    console.log("[RipReady] Message:", JSON.stringify(parsed).substring(0, 200));
 
     const op = parsed?.op;
     const d = parsed?.d;
 
+    // Hello / identify
     if (op === 1) {
       sendFrame(socket, JSON.stringify({ op: 2, d: { negotiatedRpcVersion: 1 } }));
     }
 
+    // Single request
     if (op === 6) {
       const { requestType, requestId, requestData } = d;
-
-      let responseData = {};
-
-      if (requestType === "GetOutputList") {
-        responseData = {
-          outputs: [{
-            outputName: "simple_stream",
-            outputKind: "whip_output",
-            outputWidth: 1280,
-            outputHeight: 720,
-            outputActive: false,
-            outputFlags: { OBS_OUTPUT_AUDIO: true, OBS_OUTPUT_VIDEO: true }
-          }]
-        };
-      }
-
-      if (requestType === "GetStreamStatus") {
-        responseData = {
-          outputActive: false,
-          outputReconnecting: false,
-          outputTimecode: "00:00:00.000",
-          outputDuration: 0,
-          outputCongestion: 0,
-          outputBytes: 0,
-          outputSkippedFrames: 0,
-          outputTotalFrames: 0
-        };
-      }
-
-      if (requestType === "GetProfileList") {
-        responseData = {
-          currentProfileName: "RipReady",
-          profiles: ["RipReady"]
-        };
-      }
-
-      if (requestType === "GetVideoSettings") {
-        responseData = {
-          fpsNumerator: 30,
-          fpsDenominator: 1,
-          baseWidth: 1080,
-          baseHeight: 1920,
-          outputWidth: 1080,
-          outputHeight: 1920
-        };
-      }
-
-      if (requestType === "GetStreamServiceSettings") {
-        responseData = {
-          streamServiceType: "whip_custom",
-          streamServiceSettings: {
-            server: "https://global.whip.live-video.net",
-            bearer_token: "",
-            service: "WHIP"
-          }
-        };
-      }
-
+      const responseData = handleRequest(requestType, requestData);
       sendFrame(socket, JSON.stringify({
         op: 7,
         d: { requestType, requestId, requestStatus: { result: true, code: 100 }, responseData }
       }));
-
       if (requestType === "SetStreamServiceSettings") {
         const token = requestData?.streamServiceSettings?.bearer_token;
         if (token) {
-          console.log("[RipReady] Token received!");
+          console.log("[RipReady] TOKEN RECEIVED!");
           await saveToken(token);
         }
       }
+    }
+
+    // Batch request
+    if (op === 8) {
+      const { requestId, requests } = d;
+      const results = [];
+      for (const req of requests) {
+        const responseData = handleRequest(req.requestType, req.requestData);
+        results.push({
+          requestType: req.requestType,
+          requestId: req.requestId || requestId,
+          requestStatus: { result: true, code: 100 },
+          responseData
+        });
+        if (req.requestType === "SetStreamServiceSettings") {
+          const token = req.requestData?.streamServiceSettings?.bearer_token;
+          if (token) {
+            console.log("[RipReady] TOKEN RECEIVED (batch)!");
+            await saveToken(token);
+          }
+        }
+      }
+      sendFrame(socket, JSON.stringify({
+        op: 9,
+        d: { requestId, results }
+      }));
     }
   });
 
   socket.on("error", (e) => console.error("[RipReady] Socket error:", e.message));
   socket.on("close", () => console.log("[RipReady] Disconnected"));
 });
+
+function handleRequest(requestType, requestData) {
+  if (requestType === "GetOutputList") {
+    return {
+      outputs: [{
+        outputName: "simple_stream",
+        outputKind: "whip_output",
+        outputWidth: 1080,
+        outputHeight: 1920,
+        outputActive: false,
+        outputFlags: { OBS_OUTPUT_AUDIO: true, OBS_OUTPUT_VIDEO: true }
+      }]
+    };
+  }
+  if (requestType === "GetStreamStatus") {
+    return {
+      outputActive: false,
+      outputReconnecting: false,
+      outputTimecode: "00:00:00.000",
+      outputDuration: 0,
+      outputCongestion: 0,
+      outputBytes: 0,
+      outputSkippedFrames: 0,
+      outputTotalFrames: 0
+    };
+  }
+  if (requestType === "GetProfileList") {
+    return {
+      currentProfileName: "RipReady",
+      profiles: ["RipReady"]
+    };
+  }
+  if (requestType === "GetVideoSettings") {
+    return {
+      fpsNumerator: 30,
+      fpsDenominator: 1,
+      baseWidth: 1080,
+      baseHeight: 1920,
+      outputWidth: 1080,
+      outputHeight: 1920
+    };
+  }
+  if (requestType === "GetStreamServiceSettings") {
+    return {
+      streamServiceType: "whip_custom",
+      streamServiceSettings: {
+        server: "https://global.whip.live-video.net",
+        bearer_token: "",
+        service: "WHIP"
+      }
+    };
+  }
+  // Default: return empty success for anything else including SetProfileParameter
+  return {};
+}
 
 function sendFrame(socket, data) {
   const payload = Buffer.from(data);
