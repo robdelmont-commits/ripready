@@ -790,6 +790,7 @@ var state = {
   timerSeconds: 0,
   peerConnection: null,
   mediaStream: null,
+  autoTriggerPending: false,
 };
 
 var templates = {
@@ -858,6 +859,13 @@ function startCamera() {
     document.getElementById('camStartBtn').classList.add('active');
     populateCameras();
     checkGoLive();
+    // AUTO-TRIGGER: if a token arrived while camera was starting, fire now
+    if (state.autoTriggerPending && state.token && !state.streaming) {
+      console.log("[RipReady] autoTriggerPending — camera now ready, firing goLive()");
+      state.autoTriggerPending = false;
+      showError("");
+      setTimeout(goLive, 200);
+    }
   }).catch(function(e){
     console.error('Camera error:', e);
     showError('Camera access denied. Check browser permissions.');
@@ -922,52 +930,72 @@ function checkGoLive() {
 }
 
 // ── STREAMING ──
+async function whipPost(whipUrl, sdp) {
+  // Try the URL as-is, then retry with /whip appended if we get a 404
+  var urls = [whipUrl];
+  if (!whipUrl.endsWith('/whip')) urls.push(whipUrl.replace(/\/$/, '') + '/whip');
+  for (var i = 0; i < urls.length; i++) {
+    var url = urls[i];
+    console.log('[RipReady] Trying WHIP URL:', url);
+    var resp = await fetch('/api/whip-relay', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/sdp',
+        'Authorization': 'Bearer ' + state.token,
+        'X-Whip-Url': url
+      },
+      body: sdp
+    });
+    console.log('[RipReady] WHIP response:', resp.status, url);
+    if (resp.ok) {
+      console.log('[RipReady] SUCCESS with URL:', url);
+      return resp;
+    }
+    var txt = await resp.text();
+    console.warn('[RipReady] WHIP attempt failed:', resp.status, txt, 'url:', url);
+    if (i < urls.length - 1) console.log('[RipReady] Retrying with /whip suffix...');
+    else throw new Error('Stream failed ('+resp.status+'): '+txt);
+  }
+}
+
 async function goLive() {
-  if(!state.token || !state.mediaStream) return;
+  if (!state.token || !state.mediaStream) return;
+  if (state.streaming) return; // already live
   setStatus('connecting');
   showError('');
+  console.log('[RipReady] goLive() called — token length:', state.token.length);
   try {
     var server = document.getElementById('whipServer').value.trim() || 'https://global.whip.live-video.net';
+    if (state.peerConnection) { state.peerConnection.close(); state.peerConnection = null; }
     state.peerConnection = new RTCPeerConnection({
-      iceServers:[{urls:'stun:stun.l.google.com:19302'}]
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
     });
-    state.mediaStream.getTracks().forEach(function(t){
+    state.mediaStream.getTracks().forEach(function(t) {
       state.peerConnection.addTrack(t, state.mediaStream);
     });
     var offer = await state.peerConnection.createOffer();
     await state.peerConnection.setLocalDescription(offer);
-    // Wait for ICE gathering
-    await new Promise(function(resolve){
-      if(state.peerConnection.iceGatheringState === 'complete') {resolve(); return;}
-      state.peerConnection.addEventListener('icegatheringstatechange', function(){
-        if(state.peerConnection.iceGatheringState === 'complete') resolve();
+    // Wait for ICE gathering (max 4s)
+    await new Promise(function(resolve) {
+      if (state.peerConnection.iceGatheringState === 'complete') { resolve(); return; }
+      state.peerConnection.addEventListener('icegatheringstatechange', function() {
+        if (state.peerConnection.iceGatheringState === 'complete') resolve();
       });
-      setTimeout(resolve, 3000);
+      setTimeout(resolve, 4000);
     });
     var sdp = state.peerConnection.localDescription.sdp;
-    var resp = await fetch('/api/whip-relay', {
-      method:'POST',
-      headers:{
-        'Content-Type':'application/sdp',
-        'Authorization':'Bearer '+state.token,
-        'X-Whip-Url':server
-      },
-      body:sdp
-    });
-    if(!resp.ok) {
-      var txt = await resp.text();
-      throw new Error('Stream failed: '+resp.status+' '+txt);
-    }
+    var resp = await whipPost(server, sdp);
     var answer = await resp.text();
-    await state.peerConnection.setRemoteDescription({type:'answer',sdp:answer});
+    await state.peerConnection.setRemoteDescription({ type: 'answer', sdp: answer });
     setStatus('live');
     startTimer();
     document.getElementById('goLiveBtn').style.display = 'none';
     document.getElementById('endBtn').style.display = 'block';
     setView('camera');
   } catch(e) {
-    console.error(e);
+    console.error('[RipReady] goLive error:', e);
     setStatus('offline');
+    if (state.peerConnection) { state.peerConnection.close(); state.peerConnection = null; }
     showError(e.message || 'Stream failed. Check your token and connection.');
   }
 }
@@ -1110,9 +1138,13 @@ function startTokenPolling() {
       var latest = rows[0];
       if (latest.id !== lastTokenId) {
         lastTokenId = latest.id;
+        console.log("[RipReady] NEW TOKEN DETECTED — firing auto-trigger");
+
+        // Set token in state
         var input = document.getElementById("tokenInput");
         input.value = latest.bearer_token;
         input.dispatchEvent(new Event("input"));
+
         // Extract whip_url from JWT payload
         try {
           var parts = latest.bearer_token.split(".");
@@ -1122,8 +1154,22 @@ function startTokenPolling() {
             console.log("[RipReady] WHIP URL extracted:", payload.whip_url);
           }
         } catch(e) { console.warn("[RipReady] JWT decode error:", e.message); }
-        console.log("[RipReady] Token received from relay");
+
         stopTokenPolling();
+
+        // AUTO-TRIGGER: fire Go Live immediately if camera is ready
+        // Small delay to let state settle after token input event
+        setTimeout(function() {
+          if (state.cameraActive && state.mediaStream && !state.streaming) {
+            console.log("[RipReady] Camera ready — auto-triggering goLive()");
+            showError("");
+            goLive();
+          } else {
+            console.log("[RipReady] Camera not ready — setting autoTriggerPending");
+            state.autoTriggerPending = true;
+            showError("Token received — start your camera to go live.");
+          }
+        }, 300);
       }
     } catch(e) {
       console.warn("[RipReady] Poll error:", e.message);
