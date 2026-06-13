@@ -950,7 +950,7 @@ async function goLive() {
       headers:{
         'Content-Type':'application/sdp',
         'Authorization':'Bearer '+state.token,
-        'X-WHIP-Server':server
+        'X-Whip-Url':server
       },
       body:sdp
     });
