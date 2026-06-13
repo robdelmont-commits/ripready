@@ -931,12 +931,15 @@ function checkGoLive() {
 
 // ── STREAMING ──
 async function whipPost(whipUrl, sdp) {
-  // Try the URL as-is, then retry with /whip appended if we get a 404
+  // Build URL list: named endpoint first, then numeric IP fallback
   var urls = [whipUrl];
   if (!whipUrl.endsWith('/whip')) urls.push(whipUrl.replace(/\/$/, '') + '/whip');
+  if (state.whipNumericFallback && !urls.includes(state.whipNumericFallback)) {
+    urls.push(state.whipNumericFallback);
+  }
   for (var i = 0; i < urls.length; i++) {
     var url = urls[i];
-    console.log('[RipReady] Trying WHIP URL:', url);
+    console.log('[RipReady] Trying WHIP URL (' + (i+1) + '/' + urls.length + '):', url);
     var resp = await fetch('/api/whip-relay', {
       method: 'POST',
       headers: {
@@ -953,8 +956,8 @@ async function whipPost(whipUrl, sdp) {
     }
     var txt = await resp.text();
     console.warn('[RipReady] WHIP attempt failed:', resp.status, txt, 'url:', url);
-    if (i < urls.length - 1) console.log('[RipReady] Retrying with /whip suffix...');
-    else throw new Error('Stream failed ('+resp.status+'): '+txt);
+    if (i < urls.length - 1) console.log('[RipReady] Trying next URL...');
+    else throw new Error('Stream failed (' + resp.status + '): ' + txt);
   }
 }
 
@@ -1145,13 +1148,24 @@ function startTokenPolling() {
         input.value = latest.bearer_token;
         input.dispatchEvent(new Event("input"));
 
-        // Extract whip_url from JWT payload
+        // Extract WHIP endpoint from JWT payload
+        // aws:whipUrlEndpoint is the correct full path; fallback to whip_url or numeric
         try {
           var parts = latest.bearer_token.split(".");
-          var payload = JSON.parse(atob(parts[1]));
-          if (payload.whip_url) {
-            document.getElementById("whipServer").value = payload.whip_url;
-            console.log("[RipReady] WHIP URL extracted:", payload.whip_url);
+          var pad = parts[1].length % 4 ? parts[1] + '===='.slice(parts[1].length % 4) : parts[1];
+          var payload = JSON.parse(atob(pad));
+          var endpoint = payload["aws:whipUrlEndpoint"]
+                      || payload["aws:whipUrl"]
+                      || payload["whip_url"]
+                      || null;
+          if (endpoint) {
+            document.getElementById("whipServer").value = endpoint;
+            console.log("[RipReady] WHIP endpoint set:", endpoint);
+          }
+          // Store numeric fallback in case we need it
+          if (payload["aws:whipUrlEndpointNumeric"]) {
+            state.whipNumericFallback = payload["aws:whipUrlEndpointNumeric"];
+            console.log("[RipReady] Numeric fallback:", state.whipNumericFallback);
           }
         } catch(e) { console.warn("[RipReady] JWT decode error:", e.message); }
 
