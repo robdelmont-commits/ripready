@@ -56,7 +56,7 @@ server.on("upgrade", (req, socket, head) => {
         responseData = {
           outputs: [{
             outputName: "simple_stream",
-            outputKind: "rtmp_output",
+            outputKind: "whip_output",
             outputWidth: 1280,
             outputHeight: 720,
             outputActive: false,
