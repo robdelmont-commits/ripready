@@ -968,7 +968,16 @@ async function goLive() {
     state.ivsStage = new Stage(state.token, strategy);
 
     state.ivsStage.on(StageEvents.STAGE_CONNECTION_STATE_CHANGED, function(s) {
-      console.log('[RipReady] IVS Stage state:', s);
+      var stateStr = String(s).toUpperCase();
+      console.log('[RipReady] IVS Stage connection state:', stateStr);
+      // If we somehow end up CONNECTED but never get PUBLISHED, don't stay on "Connecting"
+      if (stateStr === 'DISCONNECTED' && state.streaming) {
+        setStatus('offline');
+        stopTimer();
+        document.getElementById('goLiveBtn').style.display = 'flex';
+        document.getElementById('endBtn').style.display = 'none';
+        state.streaming = false;
+      }
     });
 
     state.ivsStage.on(StageEvents.STAGE_LEFT, function() {
@@ -983,9 +992,12 @@ async function goLive() {
     });
 
     state.ivsStage.on(StageEvents.STAGE_PARTICIPANT_PUBLISH_STATE_CHANGED, function(participant, pubState) {
-      console.log('[RipReady] Publish state:', pubState, participant.isLocal);
-      if (participant.isLocal && pubState === 'PUBLISHED') {
+      // pubState may be a string 'PUBLISHED' or the SDK enum object — coerce to string to be safe
+      var pubStateStr = String(pubState).toUpperCase();
+      console.log('[RipReady] Publish state:', pubStateStr, 'isLocal:', participant.isLocal);
+      if (participant.isLocal && pubStateStr === 'PUBLISHED') {
         console.log('[RipReady] LOCAL PUBLISH CONFIRMED — we are live!');
+        state.streaming = true;
         setStatus('live');
         startTimer();
         document.getElementById('goLiveBtn').style.display = 'none';
