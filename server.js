@@ -182,7 +182,32 @@ function parseFrame(buf) {
   } catch { return null; }
 }
 
+// FIX #3: Delete all existing tokens before saving the new one.
+// This runs on Railway which has SUPABASE_SERVICE_KEY — full delete permission.
+async function deleteOldTokens() {
+  return new Promise((resolve) => {
+    const req = https.request(`${SUPABASE_URL}/rest/v1/tokens?id=neq.00000000-0000-0000-0000-000000000000`, {
+      method: "DELETE",
+      headers: {
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${SUPABASE_KEY}`
+      }
+    }, (res) => {
+      console.log("[RipReady] Old tokens deleted — status:", res.statusCode);
+      resolve();
+    });
+    req.on("error", (e) => {
+      console.error("[RipReady] Delete error:", e.message);
+      resolve(); // Don't block the save if delete fails
+    });
+    req.end();
+  });
+}
+
 async function saveToken(token) {
+  // Always clear old tokens first so studio never picks up a stale one
+  await deleteOldTokens();
+
   const body = JSON.stringify({ bearer_token: token });
   return new Promise((resolve) => {
     const req = https.request(`${SUPABASE_URL}/rest/v1/tokens`, {
@@ -194,7 +219,7 @@ async function saveToken(token) {
         "Prefer": "return=minimal"
       }
     }, (res) => {
-      console.log("[RipReady] Supabase status:", res.statusCode);
+      console.log("[RipReady] Supabase insert status:", res.statusCode);
       resolve();
     });
     req.on("error", (e) => console.error("[RipReady] Supabase error:", e.message));
