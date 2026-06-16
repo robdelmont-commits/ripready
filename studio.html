@@ -209,11 +209,11 @@ body{
   background:#050505;
 }
 
-/* Camera canvas */
+/* Camera canvas — composited output */
 #cameraCanvas{
   width:100%;height:100%;
   object-fit:contain;
-  display:block;
+  display:none;
 }
 
 /* Holding screen overlay */
@@ -627,9 +627,12 @@ body{
         <span>Camera not started</span>
       </div>
 
-      <!-- Camera output -->
+      <!-- Hidden video — camera source only, never shown directly -->
       <video id="cameraVideo" autoplay muted playsinline
-        style="width:100%;height:100%;object-fit:contain;display:none;"></video>
+        style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;"></video>
+
+      <!-- Canvas — composited output shown in preview and sent to IVS -->
+      <canvas id="cameraCanvas" style="width:100%;height:100%;object-fit:contain;display:none;"></canvas>
 
       <!-- Holding screen overlay -->
       <div class="holding-overlay" id="holdingOverlay">
@@ -756,10 +759,6 @@ body{
         <span class="overlay-name">Scrolling Ticker</span>
         <div class="toggle" id="tog-ticker" onclick="toggleOverlay('ticker')"></div>
       </div>
-      <div class="overlay-row">
-        <span class="overlay-name">Current Spot</span>
-        <div class="toggle" id="tog-spot" onclick="toggleOverlay('spot')"></div>
-      </div>
 
       <div class="ps-label" style="margin-top:16px">Ticker Text</div>
       <input class="field-input" id="tickerText" type="text"
@@ -792,6 +791,7 @@ var state = {
   peerConnection: null,
   ivsStage: null,
   mediaStream: null,
+  canvasStream: null,
   autoTriggerPending: false,
 };
 
@@ -853,10 +853,23 @@ function startCamera() {
   navigator.mediaDevices.getUserMedia(constraints).then(function(stream){
     state.mediaStream = stream;
     state.cameraActive = true;
+
+    // Feed raw stream into hidden video element (source for canvas)
     var video = document.getElementById('cameraVideo');
     video.srcObject = stream;
-    video.style.display = 'block';
-    document.getElementById('noCameraMsg').style.display = 'none';
+    video.onloadedmetadata = function() {
+      // Set canvas to native camera resolution
+      var canvas = document.getElementById('cameraCanvas');
+      canvas.width = video.videoWidth || 1280;
+      canvas.height = video.videoHeight || 720;
+      canvas.style.display = 'block';
+      document.getElementById('noCameraMsg').style.display = 'none';
+      // Start the compositing render loop
+      startRenderLoop(video, canvas);
+      // Capture canvas stream for IVS (replaces raw video track)
+      state.canvasStream = canvas.captureStream(30);
+    };
+
     document.getElementById('camStartBtn').innerHTML = '<i class="ti ti-camera"></i> Camera On';
     document.getElementById('camStartBtn').classList.add('active');
     populateCameras();
@@ -876,6 +889,122 @@ function startCamera() {
 
 function switchCamera() {
   if(state.cameraActive) startCamera();
+}
+
+// ── CANVAS RENDER LOOP ──
+var renderLoopActive = false;
+
+function startRenderLoop(video, canvas) {
+  if (renderLoopActive) return;
+  renderLoopActive = true;
+  var ctx = canvas.getContext('2d');
+  var tickerX = 0; // ticker scroll position
+
+  function draw() {
+    if (!renderLoopActive) return;
+    var w = canvas.width;
+    var h = canvas.height;
+
+    // 1. Draw camera frame
+    ctx.drawImage(video, 0, 0, w, h);
+
+    // 2. Read current overlay state
+    var showShowName = document.getElementById('tog-showname').classList.contains('on');
+    var showLiveBadge = document.getElementById('tog-livebadge').classList.contains('on');
+    var showTicker = document.getElementById('tog-ticker').classList.contains('on');
+    var showName = document.getElementById('showNameInput').value || 'My Show';
+    var tickerText = document.getElementById('tickerText').value || '';
+    var accent = document.getElementById('accentColor').value || '#00FFD1';
+
+    // Scale factor — overlays designed at 1280px base
+    var scale = w / 1280;
+
+    // 3. LIVE Badge (top-right)
+    if (showLiveBadge) {
+      var badgeW = 90 * scale;
+      var badgeH = 34 * scale;
+      var badgeX = w - badgeW - 24 * scale;
+      var badgeY = 20 * scale;
+      var badgeR = 6 * scale;
+      // Pill background
+      ctx.fillStyle = 'rgba(0,0,0,0.65)';
+      roundRect(ctx, badgeX, badgeY, badgeW, badgeH, badgeR);
+      ctx.fill();
+      // Red dot
+      ctx.fillStyle = '#FF4444';
+      ctx.beginPath();
+      ctx.arc(badgeX + 16 * scale, badgeY + badgeH / 2, 5 * scale, 0, Math.PI * 2);
+      ctx.fill();
+      // LIVE text
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold ' + Math.round(14 * scale) + 'px Barlow Condensed, sans-serif';
+      ctx.letterSpacing = (1 * scale) + 'px';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('LIVE', badgeX + 27 * scale, badgeY + badgeH / 2 + 1);
+      ctx.letterSpacing = '0px';
+    }
+
+    // 4. Show Name (bottom-left)
+    if (showShowName) {
+      var nameSize = Math.round(28 * scale);
+      var nameX = 24 * scale;
+      var nameY = h - 52 * scale;
+      // Shadow strip behind text
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(0, h - 72 * scale, w * 0.6, 44 * scale);
+      // Accent bar
+      ctx.fillStyle = accent;
+      ctx.fillRect(nameX, nameY - 2, 3 * scale, nameSize + 4);
+      // Show name text
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold ' + nameSize + 'px Barlow Condensed, sans-serif';
+      ctx.textBaseline = 'top';
+      ctx.fillText(showName.toUpperCase(), nameX + 10 * scale, nameY);
+    }
+
+    // 5. Scrolling Ticker (very bottom)
+    if (showTicker && tickerText) {
+      var tickerH = 32 * scale;
+      var tickerY = h - tickerH;
+      // Background bar
+      ctx.fillStyle = 'rgba(0,0,0,0.80)';
+      ctx.fillRect(0, tickerY, w, tickerH);
+      // Accent left edge
+      ctx.fillStyle = accent;
+      ctx.fillRect(0, tickerY, 4 * scale, tickerH);
+      // Scrolling text
+      ctx.fillStyle = '#ffffff';
+      ctx.font = Math.round(14 * scale) + 'px Barlow Condensed, sans-serif';
+      ctx.textBaseline = 'middle';
+      // Scroll speed: pixels per frame at 30fps
+      var speed = 1.2 * scale;
+      tickerX -= speed;
+      // Measure full text width and reset when fully scrolled off
+      var fullText = tickerText + '          ' + tickerText;
+      var textW = ctx.measureText(tickerText + '          ').width;
+      if (tickerX < -textW) tickerX = 0;
+      ctx.fillText(fullText, tickerX + 20 * scale, tickerY + tickerH / 2);
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  draw();
+}
+
+// Helper: rounded rectangle path
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
 }
 
 // ── TOKEN ──
@@ -947,11 +1076,14 @@ async function goLive() {
 
     var { Stage, LocalStageStream, SubscribeType, StageEvents } = IVSBroadcastClient;
 
-    // Build streams from existing mediaStream
-    var videoTrack = state.mediaStream.getVideoTracks()[0];
+    // Use canvas stream for video (has overlays composited in)
+    // Fall back to raw camera if canvas stream not ready
+    var videoTrack = (state.canvasStream && state.canvasStream.getVideoTracks()[0])
+                     || state.mediaStream.getVideoTracks()[0];
     var audioTrack = state.mediaStream.getAudioTracks()[0];
     var cameraStream = videoTrack ? new LocalStageStream(videoTrack) : null;
     var micStream = audioTrack ? new LocalStageStream(audioTrack) : null;
+    console.log('[RipReady] Video source:', state.canvasStream ? 'canvas (composited)' : 'raw camera');
 
     // Strategy — publish only, no subscribe needed for solo streaming
     var strategy = {
