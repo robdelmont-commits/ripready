@@ -898,7 +898,7 @@ function startRenderLoop(video, canvas) {
   if (renderLoopActive) return;
   renderLoopActive = true;
   var ctx = canvas.getContext('2d');
-  var tickerX = 0; // ticker scroll position
+  var tickerX = null; // ticker scroll position — null means not yet initialised
 
   function draw() {
     if (!renderLoopActive) return;
@@ -949,15 +949,19 @@ function startRenderLoop(video, canvas) {
       var nameSize = Math.round(28 * scale);
       var nameX = 24 * scale;
       var nameY = h - 52 * scale;
-      // Shadow strip behind text
-      ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      ctx.fillRect(0, h - 72 * scale, w * 0.6, 44 * scale);
-      // Accent bar
-      ctx.fillStyle = accent;
+      var padding = 16 * scale;
+      // Measure text so shadow strip hugs it
+      ctx.font = 'bold ' + nameSize + 'px Barlow Condensed, sans-serif';
+      var nameTextW = ctx.measureText(showName.toUpperCase()).width;
+      var stripW = nameTextW + nameX + padding + 10 * scale;
+      // Shadow strip — tight to text
+      ctx.fillStyle = 'rgba(0,0,0,0.60)';
+      ctx.fillRect(0, h - 72 * scale, stripW, 44 * scale);
+      // Accent bar — always teal regardless of color picker
+      ctx.fillStyle = '#00FFD1';
       ctx.fillRect(nameX, nameY - 2, 3 * scale, nameSize + 4);
       // Show name text
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold ' + nameSize + 'px Barlow Condensed, sans-serif';
       ctx.textBaseline = 'top';
       ctx.fillText(showName.toUpperCase(), nameX + 10 * scale, nameY);
     }
@@ -978,10 +982,13 @@ function startRenderLoop(video, canvas) {
       ctx.textBaseline = 'middle';
       // Scroll speed: pixels per frame at 30fps
       var speed = 1.2 * scale;
+      var gap = '          ';
+      var fullText = tickerText + gap + tickerText + gap;
+      ctx.font = Math.round(14 * scale) + 'px Barlow Condensed, sans-serif';
+      var textW = ctx.measureText(tickerText + gap).width;
+      // Initialise ticker from right edge on first draw
+      if (tickerX === null) tickerX = w;
       tickerX -= speed;
-      // Measure full text width and reset when fully scrolled off
-      var fullText = tickerText + '          ' + tickerText;
-      var textW = ctx.measureText(tickerText + '          ').width;
       if (tickerX < -textW) tickerX = 0;
       ctx.fillText(fullText, tickerX + 20 * scale, tickerY + tickerH / 2);
     }
