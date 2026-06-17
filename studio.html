@@ -207,13 +207,18 @@ body{
   position:relative;
   overflow:hidden;
   background:#050505;
+  padding:12px 0;
 }
 
-/* Camera canvas — composited output */
+/* Camera canvas — constrained to 16:9 so preview matches stream output */
 #cameraCanvas{
-  width:100%;height:100%;
-  object-fit:contain;
   display:none;
+  cursor:default;
+  touch-action:none;
+  max-width:100%;
+  max-height:100%;
+  aspect-ratio:9/16;
+  object-fit:contain;
 }
 
 /* Holding screen overlay */
@@ -410,6 +415,22 @@ body{
 }
 .overlay-row:last-child{border-bottom:none}
 .overlay-name{font-size:13px;color:var(--muted2)}
+.img-upload-slot{margin-top:8px;margin-bottom:4px}
+.img-upload-slot input[type=file]{display:none}
+.img-upload-label{display:flex;align-items:center;gap:8px;cursor:pointer;
+  background:var(--surface2);border:1px dashed var(--border2);border-radius:8px;
+  padding:8px 12px;font-size:12px;color:var(--muted2);transition:border-color .2s}
+.img-upload-label:hover{border-color:var(--accent)}
+.img-upload-label.has-image{border-color:var(--accent);color:var(--text)}
+.img-upload-label i{font-size:16px}
+.img-preview-thumb{width:36px;height:36px;object-fit:contain;border-radius:4px;display:none}
+.corner-picker{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.corner-btn{font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--border2);
+  background:var(--surface2);color:var(--muted2);cursor:pointer;transition:all .15s}
+.corner-btn.active{background:var(--accent);color:#080808;border-color:var(--accent)}
+.size-slider-row{display:flex;align-items:center;gap:8px;margin-top:8px}
+.size-slider-row label{font-size:11px;color:var(--muted2);white-space:nowrap}
+.size-slider-row input[type=range]{flex:1;accent-color:var(--accent)}
 .toggle{
   width:36px;height:20px;
   background:var(--border2);
@@ -771,6 +792,67 @@ body{
           style="width:36px;height:36px;border:none;background:none;cursor:pointer;border-radius:6px">
         <span style="font-size:12px;color:var(--muted2)">Accent color</span>
       </div>
+
+      <!-- LOGO -->
+      <div class="ps-label" style="margin-top:16px">Logo</div>
+      <div class="img-upload-slot">
+        <label class="img-upload-label" id="logoUploadLabel" onclick="document.getElementById('logoFileInput').click()">
+          <i class="ti ti-photo"></i>
+          <span id="logoUploadText">Upload logo (PNG recommended)</span>
+          <img id="logoThumb" class="img-preview-thumb" src="" alt="">
+        </label>
+        <input type="file" id="logoFileInput" accept="image/*" onchange="handleImageUpload('logo', this)">
+        <div class="corner-picker" id="logoCornerPicker">
+          <button class="corner-btn" onclick="setCorner('logo','tl')">↖ Top Left</button>
+          <button class="corner-btn active" onclick="setCorner('logo','tr')">↗ Top Right</button>
+          <button class="corner-btn" onclick="setCorner('logo','bl')">↙ Bottom Left</button>
+          <button class="corner-btn" onclick="setCorner('logo','br')">↘ Bottom Right</button>
+        </div>
+      </div>
+
+      <!-- IMAGE SLOT 1 -->
+      <div class="ps-label" style="margin-top:16px">Image Overlay 1</div>
+      <div class="overlay-row">
+        <span class="overlay-name" id="img1Label">Image 1</span>
+        <div class="toggle" id="tog-img1" onclick="toggleOverlay('img1')"></div>
+      </div>
+      <div class="img-upload-slot">
+        <label class="img-upload-label" id="img1UploadLabel" onclick="document.getElementById('img1FileInput').click()">
+          <i class="ti ti-photo"></i>
+          <span id="img1UploadText">Upload image</span>
+          <img id="img1Thumb" class="img-preview-thumb" src="" alt="">
+        </label>
+        <input type="file" id="img1FileInput" accept="image/*" onchange="handleImageUpload('img1', this)">
+        <input class="field-input" id="img1LabelInput" type="text" placeholder="e.g. Buyer Givvy"
+          style="margin-top:6px" oninput="document.getElementById('img1Label').textContent=this.value||'Image 1'">
+        <div class="size-slider-row">
+          <label>Size</label>
+          <input type="range" min="10" max="100" value="50" id="img1Size"
+            oninput="state.images.img1.size=this.value/100">
+        </div>
+      </div>
+
+      <!-- IMAGE SLOT 2 -->
+      <div class="ps-label" style="margin-top:16px">Image Overlay 2</div>
+      <div class="overlay-row">
+        <span class="overlay-name" id="img2Label">Image 2</span>
+        <div class="toggle" id="tog-img2" onclick="toggleOverlay('img2')"></div>
+      </div>
+      <div class="img-upload-slot">
+        <label class="img-upload-label" id="img2UploadLabel" onclick="document.getElementById('img2FileInput').click()">
+          <i class="ti ti-photo"></i>
+          <span id="img2UploadText">Upload image</span>
+          <img id="img2Thumb" class="img-preview-thumb" src="" alt="">
+        </label>
+        <input type="file" id="img2FileInput" accept="image/*" onchange="handleImageUpload('img2', this)">
+        <input class="field-input" id="img2LabelInput" type="text" placeholder="e.g. Regular Givvy"
+          style="margin-top:6px" oninput="document.getElementById('img2Label').textContent=this.value||'Image 2'">
+        <div class="size-slider-row">
+          <label>Size</label>
+          <input type="range" min="10" max="100" value="50" id="img2Size"
+            oninput="state.images.img2.size=this.value/100">
+        </div>
+      </div>
     </div>
   </div>
 
@@ -793,6 +875,12 @@ var state = {
   mediaStream: null,
   canvasStream: null,
   autoTriggerPending: false,
+  images: {
+    logo:  { el: null, corner: 'tr' },
+    img1:  { el: null, x: 0.25, y: 0.45, w: 0.5, h: 0.5, size: 0.5 },
+    img2:  { el: null, x: 0.25, y: 0.45, w: 0.5, h: 0.5, size: 0.5 },
+  },
+  drag: { active: false, slot: null, offsetX: 0, offsetY: 0 },
 };
 
 var templates = {
@@ -847,7 +935,7 @@ function populateCameras() {
 function startCamera() {
   var deviceId = document.getElementById('cameraSelect').value;
   var constraints = {
-    video: deviceId ? {deviceId:{exact:deviceId}, width:{ideal:1920}, height:{ideal:1080}} : {width:{ideal:1920},height:{ideal:1080}},
+    video: deviceId ? {deviceId:{exact:deviceId}, width:{ideal:1080}, height:{ideal:1920}} : {width:{ideal:1080},height:{ideal:1920}},
     audio: true
   };
   navigator.mediaDevices.getUserMedia(constraints).then(function(stream){
@@ -860,8 +948,9 @@ function startCamera() {
     video.onloadedmetadata = function() {
       // Set canvas to native camera resolution
       var canvas = document.getElementById('cameraCanvas');
-      canvas.width = video.videoWidth || 1280;
-      canvas.height = video.videoHeight || 720;
+      // 720x1280 portrait — solid Whatnot quality, half the pixels of 1080p
+      canvas.width = 720;
+      canvas.height = 1280;
       canvas.style.display = 'block';
       document.getElementById('noCameraMsg').style.display = 'none';
       // Start the compositing render loop
@@ -897,106 +986,271 @@ var renderLoopActive = false;
 function startRenderLoop(video, canvas) {
   if (renderLoopActive) return;
   renderLoopActive = true;
-  var ctx = canvas.getContext('2d');
-  var tickerX = null; // ticker scroll position — null means not yet initialised
+  initCanvasDrag(canvas);
+  var ctx = canvas.getContext('2d', { alpha: false });
+  var lastFrame = 0;
+  var interval = 1000 / 30;
 
-  function draw() {
+  // ── Cached values — only recomputed when inputs change ──
+  var w = canvas.width;
+  var h = canvas.height;
+  var scale = w / 1280;
+
+  // Pre-compute crop rect once (camera dims don't change mid-stream)
+  var srcX = 0, srcY = 0, srcW = 0, srcH = 0, cropReady = false;
+
+  // Pre-set fonts once
+  var fontBadge  = 'bold ' + Math.round(14 * scale) + 'px Barlow Condensed, sans-serif';
+  var fontName   = 'bold ' + Math.round(28 * scale) + 'px Barlow Condensed, sans-serif';
+  var fontTicker = Math.round(14 * scale) + 'px Barlow Condensed, sans-serif';
+
+  // Pre-compute badge geometry
+  var badgeW = 90 * scale, badgeH = 34 * scale;
+  var badgeX = w - badgeW - 24 * scale, badgeY = 20 * scale, badgeR = 6 * scale;
+
+  // Pre-compute name geometry
+  var nameSize = Math.round(28 * scale);
+  var nameX = 24 * scale, nameY = h - 52 * scale;
+
+  // Pre-compute ticker geometry
+  var tickerH = 32 * scale, tickerY = h - tickerH;
+  var tickerX = null;
+  var speed = 1.2 * scale;
+
+  // Cached DOM values — refreshed every 10 frames
+  var frameCount = 0;
+  var showShowName = true, showLiveBadge = true, showTicker = false, showImg1 = false, showImg2 = false;
+  var showName = 'My Show', tickerText = '', accent = '#00FFD1';
+  var nameTextW = 0, stripW = 0, textW = 0, fullText = '', gap = '          ';
+
+  function refreshCache() {
+    showShowName  = document.getElementById('tog-showname').classList.contains('on');
+    showLiveBadge = document.getElementById('tog-livebadge').classList.contains('on');
+    showTicker    = document.getElementById('tog-ticker').classList.contains('on');
+    showImg1      = document.getElementById('tog-img1').classList.contains('on');
+    showImg2      = document.getElementById('tog-img2').classList.contains('on');
+    var newName   = document.getElementById('showNameInput').value || 'My Show';
+    var newTicker = document.getElementById('tickerText').value || '';
+    accent        = document.getElementById('accentColor').value || '#00FFD1';
+    // Re-measure text only when it changes
+    if (newName !== showName) {
+      showName = newName;
+      ctx.font = fontName;
+      nameTextW = ctx.measureText(showName.toUpperCase()).width;
+      stripW = nameTextW + nameX + 16 * scale + 10 * scale;
+    }
+    if (newTicker !== tickerText) {
+      tickerText = newTicker;
+      fullText = tickerText + gap + tickerText + gap;
+      ctx.font = fontTicker;
+      textW = ctx.measureText(tickerText + gap).width;
+      tickerX = null; // reset scroll on text change
+    }
+  }
+
+  // Initial cache fill
+  ctx.font = fontName;
+  nameTextW = ctx.measureText('My Show').width;
+  stripW = nameTextW + nameX + 16 * scale + 10 * scale;
+  refreshCache();
+
+  function draw(timestamp) {
     if (!renderLoopActive) return;
-    var w = canvas.width;
-    var h = canvas.height;
+    requestAnimationFrame(draw);
+    var delta = timestamp - lastFrame;
+    if (delta < interval) return;
+    lastFrame = timestamp - (delta % interval);
 
-    // 1. Draw camera frame
-    ctx.drawImage(video, 0, 0, w, h);
+    // Refresh DOM cache every 10 frames (~3x/sec)
+    frameCount++;
+    if (frameCount % 10 === 0) refreshCache();
 
-    // 2. Read current overlay state
-    var showShowName = document.getElementById('tog-showname').classList.contains('on');
-    var showLiveBadge = document.getElementById('tog-livebadge').classList.contains('on');
-    var showTicker = document.getElementById('tog-ticker').classList.contains('on');
-    var showName = document.getElementById('showNameInput').value || 'My Show';
-    var tickerText = document.getElementById('tickerText').value || '';
-    var accent = document.getElementById('accentColor').value || '#00FFD1';
+    // 1. Compute crop rect on first valid video frame
+    if (!cropReady && video.videoWidth) {
+      var vw = video.videoWidth, vh = video.videoHeight;
+      var canvasAR = w / h, videoAR = vw / vh;
+      if (videoAR > canvasAR) {
+        srcH = vh; srcW = vh * canvasAR; srcX = (vw - srcW) / 2; srcY = 0;
+      } else {
+        srcW = vw; srcH = vw / canvasAR; srcX = 0; srcY = (vh - srcH) / 2;
+      }
+      cropReady = true;
+    }
+    if (cropReady) ctx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, w, h);
 
-    // Scale factor — overlays designed at 1280px base
-    var scale = w / 1280;
-
-    // 3. LIVE Badge (top-right)
+    // 2. LIVE Badge
     if (showLiveBadge) {
-      var badgeW = 90 * scale;
-      var badgeH = 34 * scale;
-      var badgeX = w - badgeW - 24 * scale;
-      var badgeY = 20 * scale;
-      var badgeR = 6 * scale;
-      // Pill background
       ctx.fillStyle = 'rgba(0,0,0,0.65)';
       roundRect(ctx, badgeX, badgeY, badgeW, badgeH, badgeR);
       ctx.fill();
-      // Red dot
       ctx.fillStyle = '#FF4444';
       ctx.beginPath();
       ctx.arc(badgeX + 16 * scale, badgeY + badgeH / 2, 5 * scale, 0, Math.PI * 2);
       ctx.fill();
-      // LIVE text
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold ' + Math.round(14 * scale) + 'px Barlow Condensed, sans-serif';
+      ctx.font = fontBadge;
       ctx.letterSpacing = (1 * scale) + 'px';
       ctx.textBaseline = 'middle';
       ctx.fillText('LIVE', badgeX + 27 * scale, badgeY + badgeH / 2 + 1);
       ctx.letterSpacing = '0px';
     }
 
-    // 4. Show Name (bottom-left)
+    // 3. Show Name
     if (showShowName) {
-      var nameSize = Math.round(28 * scale);
-      var nameX = 24 * scale;
-      var nameY = h - 52 * scale;
-      var padding = 16 * scale;
-      // Measure text so shadow strip hugs it
-      ctx.font = 'bold ' + nameSize + 'px Barlow Condensed, sans-serif';
-      var nameTextW = ctx.measureText(showName.toUpperCase()).width;
-      var stripW = nameTextW + nameX + padding + 10 * scale;
-      // Shadow strip — tight to text
       ctx.fillStyle = 'rgba(0,0,0,0.60)';
       ctx.fillRect(0, h - 72 * scale, stripW, 44 * scale);
-      // Accent bar — always teal regardless of color picker
       ctx.fillStyle = '#00FFD1';
       ctx.fillRect(nameX, nameY - 2, 3 * scale, nameSize + 4);
-      // Show name text
       ctx.fillStyle = '#ffffff';
+      ctx.font = fontName;
       ctx.textBaseline = 'top';
       ctx.fillText(showName.toUpperCase(), nameX + 10 * scale, nameY);
     }
 
-    // 5. Scrolling Ticker (very bottom)
+    // 4. Scrolling Ticker
     if (showTicker && tickerText) {
-      var tickerH = 32 * scale;
-      var tickerY = h - tickerH;
-      // Background bar
       ctx.fillStyle = 'rgba(0,0,0,0.80)';
       ctx.fillRect(0, tickerY, w, tickerH);
-      // Accent left edge
       ctx.fillStyle = accent;
       ctx.fillRect(0, tickerY, 4 * scale, tickerH);
-      // Scrolling text
       ctx.fillStyle = '#ffffff';
-      ctx.font = Math.round(14 * scale) + 'px Barlow Condensed, sans-serif';
+      ctx.font = fontTicker;
       ctx.textBaseline = 'middle';
-      // Scroll speed: pixels per frame at 30fps
-      var speed = 1.2 * scale;
-      var gap = '          ';
-      var fullText = tickerText + gap + tickerText + gap;
-      ctx.font = Math.round(14 * scale) + 'px Barlow Condensed, sans-serif';
-      var textW = ctx.measureText(tickerText + gap).width;
-      // Initialise ticker from right edge on first draw
       if (tickerX === null) tickerX = w;
       tickerX -= speed;
       if (tickerX < -textW) tickerX = 0;
       ctx.fillText(fullText, tickerX + 20 * scale, tickerY + tickerH / 2);
     }
 
-    requestAnimationFrame(draw);
+    // 6. Logo (corner, always on if uploaded)
+    var logoImg = state.images.logo.el;
+    if (logoImg) {
+      var logoMaxW = 220 * scale;
+      var logoMaxH = 220 * scale;
+      var logoRatio = Math.min(logoMaxW / logoImg.width, logoMaxH / logoImg.height);
+      var logoW = logoImg.width * logoRatio;
+      var logoH = logoImg.height * logoRatio;
+      var logoPad = 20 * scale;
+      var logoCorner = state.images.logo.corner;
+      var lx = (logoCorner === 'tr' || logoCorner === 'br') ? w - logoW - logoPad : logoPad;
+      var ly = (logoCorner === 'bl' || logoCorner === 'br') ? h - logoH - logoPad : logoPad;
+      // Avoid overlapping LIVE badge when in top-right
+      if (logoCorner === 'tr') ly = 64 * scale;
+      ctx.globalAlpha = 0.92;
+      ctx.drawImage(logoImg, lx, ly, logoW, logoH);
+      ctx.globalAlpha = 1.0;
+    }
+
+    // 7. Image Slot 1
+    if (showImg1 && state.images.img1.el) {
+      drawPositionedImage(ctx, state.images.img1.el, state.images.img1, w, h);
+    }
+
+    // 8. Image Slot 2
+    if (showImg2 && state.images.img2.el) {
+      drawPositionedImage(ctx, state.images.img2.el, state.images.img2, w, h);
+    }
+
   }
 
-  draw();
+  requestAnimationFrame(draw);
+}
+
+// Draw image at stored fractional position (draggable overlays)
+function drawPositionedImage(ctx, img, imgState, w, h) {
+  // size is a fraction 0.1–1.0 of canvas width
+  var size = imgState.size || 0.5;
+  var maxW = w * size;
+  var maxH = h * size;
+  var ratio = Math.min(maxW / img.width, maxH / img.height);
+  var iw = img.width * ratio;
+  var ih = img.height * ratio;
+  // imgState.x/y are fractions — top-left corner of image
+  var ix = imgState.x * w;
+  var iy = imgState.y * h;
+  // Clamp to canvas bounds
+  ix = Math.max(0, Math.min(w - iw, ix));
+  iy = Math.max(0, Math.min(h - ih, iy));
+  // Store computed pixel bounds for hit detection
+  imgState._px = ix; imgState._py = iy; imgState._pw = iw; imgState._ph = ih;
+  ctx.drawImage(img, ix, iy, iw, ih);
+}
+
+// ── DRAG TO REPOSITION IMAGE OVERLAYS ──
+function initCanvasDrag(canvas) {
+  function getCanvasPos(e) {
+    var rect = canvas.getBoundingClientRect();
+    var scaleX = canvas.width / rect.width;
+    var scaleY = canvas.height / rect.height;
+    var clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    var clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY
+    };
+  }
+
+  function hitTest(pos) {
+    // Check img2 first (drawn on top)
+    var slots = ['img2', 'img1'];
+    for (var i = 0; i < slots.length; i++) {
+      var slot = slots[i];
+      var tog = document.getElementById('tog-' + slot);
+      var imgState = state.images[slot];
+      if (!tog || !tog.classList.contains('on')) continue;
+      if (!imgState.el || imgState._px === undefined) continue;
+      if (pos.x >= imgState._px && pos.x <= imgState._px + imgState._pw &&
+          pos.y >= imgState._py && pos.y <= imgState._py + imgState._ph) {
+        return slot;
+      }
+    }
+    return null;
+  }
+
+  function onStart(e) {
+    var pos = getCanvasPos(e);
+    var hit = hitTest(pos);
+    if (!hit) return;
+    e.preventDefault();
+    var imgState = state.images[hit];
+    state.drag.active = true;
+    state.drag.slot = hit;
+    // Offset from image top-left in canvas pixels
+    state.drag.offsetX = pos.x - imgState._px;
+    state.drag.offsetY = pos.y - imgState._py;
+    canvas.style.cursor = 'grabbing';
+  }
+
+  function onMove(e) {
+    if (!state.drag.active) return;
+    e.preventDefault();
+    var pos = getCanvasPos(e);
+    var imgState = state.images[state.drag.slot];
+    // Convert to fractional position
+    var newX = (pos.x - state.drag.offsetX) / canvas.width;
+    var newY = (pos.y - state.drag.offsetY) / canvas.height;
+    // Clamp so image stays fully within canvas
+    var iw = (imgState._pw || 0) / canvas.width;
+    var ih = (imgState._ph || 0) / canvas.height;
+    imgState.x = Math.max(0, Math.min(1 - iw, newX));
+    imgState.y = Math.max(0, Math.min(1 - ih, newY));
+  }
+
+  function onEnd(e) {
+    if (!state.drag.active) return;
+    state.drag.active = false;
+    state.drag.slot = null;
+    canvas.style.cursor = 'default';
+  }
+
+  // Mouse
+  canvas.addEventListener('mousedown', onStart);
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onEnd);
+  // Touch
+  canvas.addEventListener('touchstart', onStart, { passive: false });
+  window.addEventListener('touchmove', onMove, { passive: false });
+  window.addEventListener('touchend', onEnd);
 }
 
 // Helper: rounded rectangle path
@@ -1268,6 +1522,42 @@ function updateCurrentSpot() {
 }
 
 // ── OVERLAYS ──
+// ── IMAGE UPLOAD HANDLER ──
+function handleImageUpload(slot, input) {
+  var file = input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      state.images[slot].el = img;
+      // Default position: bottom-right quadrant, out of face
+      if (slot === 'img1') { state.images.img1.x = 0.5; state.images.img1.y = 0.45; }
+      if (slot === 'img2') { state.images.img2.x = 0.5; state.images.img2.y = 0.45; }
+      // Update UI
+      var thumb = document.getElementById(slot + 'Thumb');
+      var label = document.getElementById(slot + 'UploadLabel');
+      var text  = document.getElementById(slot + 'UploadText');
+      if (thumb) { thumb.src = e.target.result; thumb.style.display = 'block'; }
+      if (label) label.classList.add('has-image');
+      if (text)  text.textContent = file.name;
+      // Auto-enable toggle when image loaded
+      var tog = document.getElementById('tog-' + slot);
+      if (tog && !tog.classList.contains('on')) tog.classList.add('on');
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function setCorner(slot, corner) {
+  state.images[slot].corner = corner;
+  // Update active button
+  var btns = document.querySelectorAll('#' + slot + 'CornerPicker .corner-btn');
+  btns.forEach(function(b) { b.classList.remove('active'); });
+  event.target.classList.add('active');
+}
+
 function toggleOverlay(id) {
   var tog = document.getElementById('tog-'+id);
   tog.classList.toggle('on');
