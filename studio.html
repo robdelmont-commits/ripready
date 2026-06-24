@@ -963,12 +963,14 @@ function startCamera() {
     document.getElementById('camStartBtn').classList.add('active');
     populateCameras();
     checkGoLive();
-    // AUTO-TRIGGER: if a token arrived while camera was starting, fire now
+    // AUTO-TRIGGER: if a token arrived while camera was starting, fire now —
+    // but wait for canvasStream specifically, since cameraActive flips true
+    // before onloadedmetadata (and canvasStream) is ready.
     if (state.autoTriggerPending && state.token && !state.streaming) {
-      console.log("[RipReady] autoTriggerPending — camera now ready, firing goLive()");
+      console.log("[RipReady] autoTriggerPending — camera ready, waiting on canvasStream before firing goLive()");
       state.autoTriggerPending = false;
       showError("");
-      setTimeout(goLive, 200);
+      waitForCanvasStreamThenGoLive();
     }
   }).catch(function(e){
     console.error('Camera error:', e);
@@ -1316,6 +1318,24 @@ if(typeof chrome !== 'undefined' && chrome.storage) {
   });
 }
 
+// Waits for state.canvasStream to be populated (up to ~2s) before firing goLive().
+// Prevents the race where cameraActive is true but onloadedmetadata/captureStream
+// hasn't run yet, which previously caused goLive() to fall back to raw camera.
+function waitForCanvasStreamThenGoLive(attempt) {
+  attempt = attempt || 0;
+  if (state.canvasStream) {
+    console.log('[RipReady] canvasStream ready after', attempt * 100, 'ms — firing goLive()');
+    goLive();
+    return;
+  }
+  if (attempt >= 20) { // ~2s max wait
+    console.warn('[RipReady] canvasStream never populated after 2s — firing goLive() anyway (will fall back to raw camera)');
+    goLive();
+    return;
+  }
+  setTimeout(function() { waitForCanvasStreamThenGoLive(attempt + 1); }, 100);
+}
+
 function checkGoLive() {
   var ready = state.token && state.token.length > 20 && state.cameraActive;
   document.getElementById('goLiveBtn').disabled = !ready;
@@ -1336,6 +1356,17 @@ async function goLive() {
     }
 
     var { Stage, LocalStageStream, SubscribeType, StageEvents } = IVSBroadcastClient;
+
+    // Safety net: if canvasStream isn't populated yet (e.g. manual click landed
+    // right in the onloadedmetadata gap), give it a brief moment to show up
+    // before falling back to raw camera. Auto-trigger paths already wait via
+    // waitForCanvasStreamThenGoLive(), so this should rarely actually wait.
+    if (!state.canvasStream) {
+      console.log('[RipReady] canvasStream not yet set in goLive() — short poll before fallback');
+      for (var i = 0; i < 10 && !state.canvasStream; i++) {
+        await new Promise(function(resolve) { setTimeout(resolve, 100); });
+      }
+    }
 
     // Use canvas stream for video (has overlays composited in)
     // Fall back to raw camera if canvas stream not ready
@@ -1613,13 +1644,15 @@ function startTokenPolling() {
 
         stopTokenPolling();
 
-        // AUTO-TRIGGER: fire Go Live immediately if camera is ready
+        // AUTO-TRIGGER: fire Go Live immediately if camera is ready —
+        // wait for canvasStream specifically, not just cameraActive, since
+        // cameraActive flips true before the canvas is actually populated.
         // Small delay to let state settle after token input event
         setTimeout(function() {
           if (state.cameraActive && state.mediaStream && !state.streaming) {
-            console.log("[RipReady] Camera ready — auto-triggering goLive()");
+            console.log("[RipReady] Camera ready — waiting on canvasStream before auto-triggering goLive()");
             showError("");
-            goLive();
+            waitForCanvasStreamThenGoLive();
           } else {
             console.log("[RipReady] Camera not ready — setting autoTriggerPending");
             state.autoTriggerPending = true;
