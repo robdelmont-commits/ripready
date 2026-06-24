@@ -633,9 +633,170 @@ body{
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* ── ONBOARDING PANEL ── */
+.onboard-wrap{
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  z-index:500;
+  font-family:'Barlow',sans-serif;
+}
+.onboard-badge{
+  display:none;
+  align-items:center;
+  gap:8px;
+  background:var(--surface2);
+  border:1px solid var(--border2);
+  border-radius:999px;
+  padding:8px 14px 8px 8px;
+  cursor:pointer;
+  box-shadow:0 4px 16px rgba(0,0,0,0.4);
+}
+.onboard-badge:hover{border-color:var(--teal)}
+.onboard-badge-dot{
+  width:18px;height:18px;border-radius:50%;
+  background:var(--teal);color:#000;
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;
+}
+.onboard-badge-text{
+  font-size:12px;color:var(--muted2);
+  font-family:'Barlow Condensed',sans-serif;
+  letter-spacing:0.04em;text-transform:uppercase;
+}
+.onboard-panel{
+  width:300px;
+  background:var(--surface2);
+  border:1px solid var(--border2);
+  border-radius:var(--radius);
+  box-shadow:0 8px 32px rgba(0,0,0,0.5);
+  overflow:hidden;
+}
+.onboard-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px;
+  border-bottom:1px solid var(--border);
+}
+.onboard-title{
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;font-size:15px;
+  letter-spacing:0.04em;text-transform:uppercase;
+  color:var(--text);
+}
+.onboard-close{
+  cursor:pointer;color:var(--muted);
+  font-size:18px;line-height:1;
+  padding:2px 4px;
+}
+.onboard-close:hover{color:var(--text)}
+.onboard-body{padding:14px 16px 16px}
+.onboard-step{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:10px 0;
+  border-bottom:1px solid var(--border);
+}
+.onboard-step:last-child{border-bottom:none;padding-bottom:0}
+.onboard-step-icon{
+  flex-shrink:0;
+  width:22px;height:22px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:700;
+  border:1.5px solid var(--border2);
+  color:var(--muted);
+  margin-top:1px;
+}
+.onboard-step.done .onboard-step-icon{
+  background:var(--teal);border-color:var(--teal);color:#000;
+}
+.onboard-step.active .onboard-step-icon{
+  border-color:var(--teal);color:var(--teal);
+}
+.onboard-step-body{flex:1;min-width:0}
+.onboard-step-label{
+  font-size:13px;font-weight:600;color:var(--text);
+  margin-bottom:2px;
+}
+.onboard-step.done .onboard-step-label{color:var(--muted2)}
+.onboard-step-sub{
+  font-size:11px;color:var(--muted);line-height:1.4;
+}
+.onboard-step-action{
+  display:inline-block;margin-top:6px;
+  font-size:11px;font-weight:600;
+  color:var(--teal);
+  text-decoration:none;
+  border:1px solid var(--teal);
+  border-radius:6px;
+  padding:5px 10px;
+  cursor:pointer;
+  font-family:'Barlow Condensed',sans-serif;
+  letter-spacing:0.03em;text-transform:uppercase;
+}
+.onboard-step-action:hover{background:var(--teal-dim)}
+.onboard-step-checkbox{
+  display:flex;align-items:center;gap:6px;
+  margin-top:6px;font-size:11px;color:var(--muted2);
+  cursor:pointer;
+}
+.onboard-step-checkbox input{
+  accent-color:var(--teal);
+  width:14px;height:14px;
+}
 </style>
 </head>
 <body>
+
+<!-- ONBOARDING PANEL -->
+<div class="onboard-wrap" id="onboardWrap">
+  <div class="onboard-badge" id="onboardBadge" onclick="onboardExpand()">
+    <div class="onboard-badge-dot" id="onboardBadgeDot">1</div>
+    <div class="onboard-badge-text" id="onboardBadgeText">Setup</div>
+  </div>
+  <div class="onboard-panel" id="onboardPanel">
+    <div class="onboard-header">
+      <div class="onboard-title">Get Live</div>
+      <div class="onboard-close" onclick="onboardCollapse()">&times;</div>
+    </div>
+    <div class="onboard-body">
+
+      <div class="onboard-step" id="onboardStep1">
+        <div class="onboard-step-icon" id="onboardIcon1">1</div>
+        <div class="onboard-step-body">
+          <div class="onboard-step-label">Install the extension</div>
+          <div class="onboard-step-sub" id="onboardSub1">RipReady needs this to connect to Whatnot.</div>
+          <a class="onboard-step-action" id="onboardAction1" href="https://chrome.google.com/webstore" target="_blank" rel="noopener">Get Extension</a>
+        </div>
+      </div>
+
+      <div class="onboard-step" id="onboardStep2">
+        <div class="onboard-step-icon" id="onboardIcon2">2</div>
+        <div class="onboard-step-body">
+          <div class="onboard-step-label">Turn on your camera</div>
+          <div class="onboard-step-sub" id="onboardSub2">Use the Camera view on the left.</div>
+        </div>
+      </div>
+
+      <div class="onboard-step" id="onboardStep3">
+        <div class="onboard-step-icon" id="onboardIcon3">3</div>
+        <div class="onboard-step-body">
+          <div class="onboard-step-label">Connect on Whatnot</div>
+          <div class="onboard-step-sub" id="onboardSub3">Go to your show &rarr; Stream via OBS Tools &rarr; Connect. You'll come back here automatically once it's done.</div>
+          <a class="onboard-step-action" id="onboardAction3" href="https://www.whatnot.com" target="_blank" rel="noopener">Open Whatnot</a>
+        </div>
+      </div>
+
+      <div class="onboard-step" id="onboardStep4">
+        <div class="onboard-step-icon" id="onboardIcon4">4</div>
+        <div class="onboard-step-body">
+          <div class="onboard-step-label">You're live</div>
+          <div class="onboard-step-sub" id="onboardSub4">Waiting on the steps above.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
 
 <!-- TOP BAR -->
 <div class="topbar">
@@ -1803,7 +1964,102 @@ document.addEventListener('DOMContentLoaded', function(){
   setView('holding');
   setStatus('holding');
   startTokenPolling();
+  onboardInit();
 });
+
+// ── ONBOARDING ──
+// Reads real app state — never duplicates or redefines existing state.
+// Pure read + UI update. Does not touch goLive(), startCamera(), token logic.
+var onboardState = {
+  expanded: true,
+  pollInterval: null
+};
+
+function onboardInit() {
+  // Respect a real "all done, hide forever" choice, but otherwise always
+  // re-check live state on every load rather than trusting a stale flag —
+  // extension/camera/token status can change between sessions.
+  var dismissed = false;
+  try { dismissed = localStorage.getItem('ripready_onboard_dismissed') === 'true'; } catch(e) {}
+
+  onboardRefresh();
+
+  if (dismissed) {
+    onboardCollapse();
+  }
+
+  // Poll every 1s — cheap DOM/state reads only, matches existing app's
+  // lightweight-polling pattern (token polling already runs every 3s).
+  onboardState.pollInterval = setInterval(onboardRefresh, 1000);
+}
+
+function onboardExtensionInstalled() {
+  return document.documentElement.getAttribute('data-ripready-installed') === 'true';
+}
+
+function onboardRefresh() {
+  var extOk = onboardExtensionInstalled();
+  var camOk = !!state.cameraActive;
+  var tokenOk = !!(state.token && state.token.length > 20);
+  var liveOk = !!state.streaming;
+
+  onboardSetStep(1, extOk, extOk ? 'Extension installed and active.' : 'RipReady needs this to connect to Whatnot.');
+  document.getElementById('onboardAction1').style.display = extOk ? 'none' : 'inline-block';
+
+  onboardSetStep(2, camOk, camOk ? 'Camera is on.' : 'Use the Camera view on the left.', extOk);
+
+  onboardSetStep(3, tokenOk, tokenOk ? 'Connected — token received.' : 'Go to your show \u2192 Stream via OBS Tools \u2192 Connect. You\u2019ll come back here automatically once it\u2019s done.', extOk && camOk);
+  document.getElementById('onboardAction3').style.display = tokenOk ? 'none' : 'inline-block';
+
+  onboardSetStep(4, liveOk, liveOk ? 'You are live on Whatnot.' : 'Waiting on the steps above.', tokenOk);
+
+  // Badge state
+  var doneCount = [extOk, camOk, tokenOk, liveOk].filter(Boolean).length;
+  var badgeDot = document.getElementById('onboardBadgeDot');
+  var badgeText = document.getElementById('onboardBadgeText');
+  if (liveOk) {
+    badgeDot.textContent = '\u2713';
+    badgeText.textContent = 'Live';
+  } else {
+    badgeDot.textContent = String(doneCount + 1 > 4 ? 4 : doneCount + 1);
+    badgeText.textContent = 'Setup ' + doneCount + '/4';
+  }
+
+  // Auto-collapse to badge once fully live, but only the first time it
+  // happens (don't fight a user who re-expands to check status mid-show).
+  if (liveOk && onboardState.expanded && !onboardState.autoCollapsedOnLive) {
+    onboardState.autoCollapsedOnLive = true;
+    onboardCollapse();
+    try { localStorage.setItem('ripready_onboard_dismissed', 'true'); } catch(e) {}
+  }
+}
+
+function onboardSetStep(n, done, subtext, enabled) {
+  var step = document.getElementById('onboardStep' + n);
+  var icon = document.getElementById('onboardIcon' + n);
+  var sub = document.getElementById('onboardSub' + n);
+  step.classList.remove('done', 'active');
+  if (done) {
+    step.classList.add('done');
+    icon.textContent = '\u2713';
+  } else {
+    icon.textContent = String(n);
+    if (enabled !== false) step.classList.add('active');
+  }
+  if (sub && subtext) sub.textContent = subtext;
+}
+
+function onboardExpand() {
+  onboardState.expanded = true;
+  document.getElementById('onboardBadge').style.display = 'none';
+  document.getElementById('onboardPanel').style.display = 'block';
+}
+
+function onboardCollapse() {
+  onboardState.expanded = false;
+  document.getElementById('onboardBadge').style.display = 'flex';
+  document.getElementById('onboardPanel').style.display = 'none';
+}
 
 function showError(msg) {
   var el = document.getElementById('streamError');
