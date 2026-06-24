@@ -275,6 +275,51 @@ body{
   padding:0 16px;gap:10px;
 }
 
+/* Quick overlay toggle bar — fast on/off access during a live show */
+.quick-toggle-bar{
+  display:flex;align-items:center;
+  gap:10px;
+  padding:10px 16px;
+  background:var(--surface);
+  border-top:1px solid var(--border);
+  flex-shrink:0;
+}
+.quick-toggle-label{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:11px;font-weight:600;
+  letter-spacing:0.1em;text-transform:uppercase;
+  color:var(--muted);
+  flex-shrink:0;
+}
+.quick-toggle-btn{
+  display:flex;align-items:center;gap:8px;
+  background:var(--surface2);
+  border:1px solid var(--border2);
+  border-radius:var(--radius);
+  padding:8px 14px;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:14px;font-weight:600;
+  color:var(--muted2);
+  cursor:pointer;
+  transition:all 0.15s;
+}
+.quick-toggle-btn:hover{border-color:var(--text);color:var(--text)}
+.quick-toggle-btn.on{
+  border-color:var(--teal);
+  color:var(--teal);
+  background:var(--teal-dim);
+}
+.quick-toggle-dot{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--border2);
+  flex-shrink:0;
+  transition:background 0.15s;
+}
+.quick-toggle-btn.on .quick-toggle-dot{
+  background:var(--teal);
+  box-shadow:0 0 6px var(--teal);
+}
+
 /* Buttons */
 .btn{
   font-family:'Barlow Condensed',sans-serif;
@@ -663,6 +708,19 @@ body{
       </div>
     </div>
 
+    <!-- Quick overlay toggles — fast on/off access without leaving Camera view -->
+    <div class="quick-toggle-bar" id="quickToggleBar">
+      <span class="quick-toggle-label">Quick Toggles</span>
+      <button class="quick-toggle-btn" id="qt-img1" onclick="toggleOverlay('img1')">
+        <span class="quick-toggle-dot"></span>
+        <span id="qt-img1-name">Image 1</span>
+      </button>
+      <button class="quick-toggle-btn" id="qt-img2" onclick="toggleOverlay('img2')">
+        <span class="quick-toggle-dot"></span>
+        <span id="qt-img2-name">Image 2</span>
+      </button>
+    </div>
+
     <!-- Preview controls -->
     <div class="preview-controls">
       <select class="cam-select" id="cameraSelect" onchange="switchCamera()">
@@ -824,7 +882,7 @@ body{
         </label>
         <input type="file" id="img1FileInput" accept="image/*" onchange="handleImageUpload('img1', this)">
         <input class="field-input" id="img1LabelInput" type="text" placeholder="e.g. Buyer Givvy"
-          style="margin-top:6px" oninput="document.getElementById('img1Label').textContent=this.value||'Image 1'">
+          style="margin-top:6px" oninput="document.getElementById('img1Label').textContent=this.value||'Image 1'; document.getElementById('qt-img1-name').textContent=this.value||'Image 1'">
         <div class="size-slider-row">
           <label>Size</label>
           <input type="range" min="10" max="100" value="50" id="img1Size"
@@ -846,7 +904,7 @@ body{
         </label>
         <input type="file" id="img2FileInput" accept="image/*" onchange="handleImageUpload('img2', this)">
         <input class="field-input" id="img2LabelInput" type="text" placeholder="e.g. Regular Givvy"
-          style="margin-top:6px" oninput="document.getElementById('img2Label').textContent=this.value||'Image 2'">
+          style="margin-top:6px" oninput="document.getElementById('img2Label').textContent=this.value||'Image 2'; document.getElementById('qt-img2-name').textContent=this.value||'Image 2'">
         <div class="size-slider-row">
           <label>Size</label>
           <input type="range" min="10" max="100" value="50" id="img2Size"
@@ -1572,9 +1630,13 @@ function handleImageUpload(slot, input) {
       if (thumb) { thumb.src = e.target.result; thumb.style.display = 'block'; }
       if (label) label.classList.add('has-image');
       if (text)  text.textContent = file.name;
-      // Auto-enable toggle when image loaded
+      // Auto-enable toggle when image loaded — keep quick-toggle bar in sync
       var tog = document.getElementById('tog-' + slot);
-      if (tog && !tog.classList.contains('on')) tog.classList.add('on');
+      if (tog && !tog.classList.contains('on')) {
+        tog.classList.add('on');
+        var quick = document.getElementById('qt-' + slot);
+        if (quick) quick.classList.add('on');
+      }
     };
     img.src = e.target.result;
   };
@@ -1591,7 +1653,12 @@ function setCorner(slot, corner) {
 
 function toggleOverlay(id) {
   var tog = document.getElementById('tog-'+id);
+  var quick = document.getElementById('qt-'+id);
+  // Flip based on the tab toggle's current state, then sync both UIs —
+  // this works whether the click came from the Overlays tab or the
+  // quick-toggle bar under the camera preview.
   tog.classList.toggle('on');
+  if (quick) quick.classList.toggle('on', tog.classList.contains('on'));
 }
 // — TOKEN POLLING —
 const SUPABASE_URL = "https://lomcfdnjyoujtwbuvexb.supabase.co";
