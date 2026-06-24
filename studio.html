@@ -992,8 +992,15 @@ function populateCameras() {
 
 function startCamera() {
   var deviceId = document.getElementById('cameraSelect').value;
+  // frameRate is explicitly requested because leaving it unset lets the
+  // browser/camera auto-negotiate a frame rate, which on some webcams
+  // (confirmed on HD Pro Webcam C920) can land on a very low value (~2fps)
+  // even though the device supports up to 30fps — causing choppy preview
+  // and broadcast despite the canvas render loop running at a healthy 60fps.
   var constraints = {
-    video: deviceId ? {deviceId:{exact:deviceId}, width:{ideal:1080}, height:{ideal:1920}} : {width:{ideal:1080},height:{ideal:1920}},
+    video: deviceId
+      ? {deviceId:{exact:deviceId}, width:{ideal:1080}, height:{ideal:1920}, frameRate:{ideal:30,min:24}}
+      : {width:{ideal:1080}, height:{ideal:1920}, frameRate:{ideal:30,min:24}},
     audio: true
   };
   navigator.mediaDevices.getUserMedia(constraints).then(function(stream){
