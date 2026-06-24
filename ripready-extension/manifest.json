@@ -20,6 +20,12 @@
       "js": ["inject-loader.js", "content-bridge.js"],
       "run_at": "document_start",
       "all_frames": false
+    },
+    {
+      "matches": ["https://ripready.app/*"],
+      "js": ["ripready-marker.js"],
+      "run_at": "document_end",
+      "all_frames": false
     }
   ],
   "web_accessible_resources": [
