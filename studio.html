@@ -726,7 +726,7 @@ body{
       <select class="cam-select" id="cameraSelect" onchange="switchCamera()">
         <option value="">Select Camera</option>
       </select>
-      <button class="btn btn-ghost" id="camStartBtn" onclick="startCamera()">
+      <button class="btn btn-ghost" id="camStartBtn" onclick="toggleCamera()">
         <i class="ti ti-camera"></i> Start Camera
       </button>
       <button class="btn btn-ghost active" id="holdingToggleBtn" onclick="toggleHolding()">
@@ -1041,6 +1041,55 @@ function startCamera() {
     console.error('Camera error:', e);
     showError('Camera access denied. Check browser permissions.');
   });
+}
+
+// Dispatches to start or stop based on current state — this is what the
+// Camera button actually calls now, since clicking it a second time
+// previously just re-ran startCamera() with no effect (the bug: there
+// was no stopCamera() at all, so the button could never turn the camera off).
+function toggleCamera() {
+  if (state.cameraActive) {
+    stopCamera();
+  } else {
+    startCamera();
+  }
+}
+
+async function stopCamera() {
+  // If currently live, leave the broadcast first so we don't yank the
+  // camera out from under an active IVS stage.
+  if (state.streaming) {
+    await endStream();
+  }
+
+  // Halt the render loop so it stops drawing video frames that no
+  // longer exist once the tracks are stopped below.
+  renderLoopActive = false;
+
+  // Release the actual camera/mic hardware — without this, the camera
+  // light stays on and other apps (e.g. OBS) can't get exclusive access.
+  if (state.mediaStream) {
+    state.mediaStream.getTracks().forEach(function(track) { track.stop(); });
+    state.mediaStream = null;
+  }
+  if (state.canvasStream) {
+    state.canvasStream.getTracks().forEach(function(track) { track.stop(); });
+    state.canvasStream = null;
+  }
+  state.cameraActive = false;
+  state.autoTriggerPending = false;
+
+  // Reset video/canvas back to their pre-camera state
+  var video = document.getElementById('cameraVideo');
+  video.srcObject = null;
+  var canvas = document.getElementById('cameraCanvas');
+  canvas.style.display = 'none';
+  document.getElementById('noCameraMsg').style.display = 'flex';
+
+  // Reset button back to its original label/state
+  document.getElementById('camStartBtn').innerHTML = '<i class="ti ti-camera"></i> Start Camera';
+  document.getElementById('camStartBtn').classList.remove('active');
+  checkGoLive();
 }
 
 function switchCamera() {
