@@ -1009,6 +1009,12 @@ body{
         <span class="overlay-name">Show Name</span>
         <div class="toggle on" id="tog-showname" onclick="toggleOverlay('showname')"></div>
       </div>
+      <div class="corner-picker" id="shownameCornerPicker">
+        <button class="corner-btn" onclick="setCorner('showname','tl')">↖ Top Left</button>
+        <button class="corner-btn" onclick="setCorner('showname','tr')">↗ Top Right</button>
+        <button class="corner-btn active" onclick="setCorner('showname','bl')">↙ Bottom Left</button>
+        <button class="corner-btn" onclick="setCorner('showname','br')">↘ Bottom Right</button>
+      </div>
       <div class="overlay-row">
         <span class="overlay-name">LIVE Badge</span>
         <div class="toggle on" id="tog-livebadge" onclick="toggleOverlay('livebadge')"></div>
@@ -1022,6 +1028,14 @@ body{
       <input class="field-input" id="tickerText" type="text"
         placeholder="Welcome to the show! Spots available..."
         value="Welcome to the show! All spots open — grab yours now!">
+
+      <div class="ps-label" style="margin-top:16px">Ticker Vertical Position</div>
+      <div class="size-slider-row">
+        <label>Top</label>
+        <input type="range" id="tickerYSlider" min="0" max="100" value="100"
+          style="flex:1" oninput="state.tickerYFraction = this.value / 100">
+        <label>Bottom</label>
+      </div>
 
       <div class="ps-label">Show Color</div>
       <div style="display:flex;gap:8px;align-items:center">
@@ -1117,6 +1131,13 @@ var state = {
     img1:  { el: null, x: 0.25, y: 0.45, w: 0.5, h: 0.5, size: 0.5 },
     img2:  { el: null, x: 0.25, y: 0.45, w: 0.5, h: 0.5, size: 0.5 },
   },
+  // Show name corner defaults to 'bl' to match its original always-bottom-left
+  // position, so existing shows don't visually jump when this ships.
+  showName: { corner: 'bl' },
+  // 0 = top of frame, 1 = bottom of frame. Lets the ticker be repositioned
+  // vertically so it doesn't collide with Break Builder content at the
+  // bottom. The ticker itself still scrolls horizontally edge-to-edge.
+  tickerYFraction: 1,
   drag: { active: false, slot: null, offsetX: 0, offsetY: 0 },
 };
 
@@ -1301,17 +1322,22 @@ function startRenderLoop(video, canvas) {
   // Pre-set fonts once
   var fontBadge  = 'bold ' + Math.round(14 * scale) + 'px Barlow Condensed, sans-serif';
   var fontName   = 'bold ' + Math.round(28 * scale) + 'px Barlow Condensed, sans-serif';
-  var fontTicker = Math.round(14 * scale) + 'px Barlow Condensed, sans-serif';
+  // Bumped 14 -> 18: still read as small on the actual broadcast even after
+  // the scale fix. Re-check on real output; raise further if still thin.
+  var fontTicker = Math.round(18 * scale) + 'px Barlow Condensed, sans-serif';
 
   // Pre-compute badge geometry
   var badgeW = 90 * scale, badgeH = 34 * scale;
   var badgeX = w - badgeW - 24 * scale, badgeY = 20 * scale, badgeR = 6 * scale;
 
-  // Pre-compute name geometry
+  // Name geometry — nameX/nameY/stripDir now depend on the chosen corner,
+  // so they're recomputed in refreshCache() (not every frame) rather than
+  // fixed here. nameSize is corner-independent so it stays a one-time calc.
   var nameSize = Math.round(28 * scale);
-  var nameX = 24 * scale, nameY = h - 52 * scale;
+  var nameX = 24 * scale, nameY = h - 52 * scale, stripDir = 1; // stripDir: 1 = grows right, -1 = grows left
 
-  // Pre-compute ticker geometry
+  // Ticker geometry — horizontal scroll always spans full width; only the
+  // vertical position (tickerY) is adjustable, recomputed in refreshCache().
   var tickerH = 32 * scale, tickerY = h - tickerH;
   var tickerX = null;
   var speed = 1.2 * scale;
@@ -1319,8 +1345,9 @@ function startRenderLoop(video, canvas) {
   // Cached DOM values — refreshed every 10 frames
   var frameCount = 0;
   var showShowName = true, showLiveBadge = true, showTicker = false, showImg1 = false, showImg2 = false;
-  var showName = 'My Show', tickerText = '', accent = '#00FFD1';
+  var showName = '', tickerText = '', accent = '#00FFD1';
   var nameTextW = 0, stripW = 0, textW = 0, fullText = '', gap = '          ';
+  var nameIsTop = false;
 
   function refreshCache() {
     showShowName  = document.getElementById('tog-showname').classList.contains('on');
@@ -1331,13 +1358,31 @@ function startRenderLoop(video, canvas) {
     var newName   = document.getElementById('showNameInput').value || 'My Show';
     var newTicker = document.getElementById('tickerText').value || '';
     accent        = document.getElementById('accentColor').value || '#00FFD1';
+
+    // Show name corner: top corners flip nameY to the top edge; right
+    // corners flip the strip to grow leftward from the right edge instead
+    // of rightward from the left edge.
+    var corner = state.showName.corner;
+    var isTop  = (corner === 'tl' || corner === 'tr');
+    var isRight = (corner === 'tr' || corner === 'br');
+    nameIsTop = isTop;
+    nameY = isTop ? (20 * scale) : (h - 52 * scale);
+    stripDir = isRight ? -1 : 1;
+    nameX = 24 * scale; // constant edge inset; draw-time logic picks which edge
+
+    // Ticker vertical position: fraction 0 (top) to 1 (bottom) maps across
+    // the full canvas height, clamped so the band never runs off-canvas.
+    tickerY = Math.max(0, Math.min(h - tickerH, state.tickerYFraction * (h - tickerH)));
+
     // Re-measure text only when it changes
     if (newName !== showName) {
       showName = newName;
       ctx.font = fontName;
       nameTextW = ctx.measureText(showName.toUpperCase()).width;
-      stripW = nameTextW + nameX + 16 * scale + 10 * scale;
     }
+    // Strip width depends on text width + which way it grows, so recompute
+    // whenever either the text or the corner could have changed direction.
+    stripW = nameTextW + 16 * scale + 10 * scale + (24 * scale);
     if (newTicker !== tickerText) {
       tickerText = newTicker;
       fullText = tickerText + gap + tickerText + gap;
@@ -1347,10 +1392,7 @@ function startRenderLoop(video, canvas) {
     }
   }
 
-  // Initial cache fill
-  ctx.font = fontName;
-  nameTextW = ctx.measureText('My Show').width;
-  stripW = nameTextW + nameX + 16 * scale + 10 * scale;
+  // Initial cache fill (refreshCache computes nameTextW/stripW/tickerY/etc.)
   refreshCache();
 
   function draw(timestamp) {
@@ -1394,19 +1436,31 @@ function startRenderLoop(video, canvas) {
       ctx.letterSpacing = '0px';
     }
 
-    // 3. Show Name
+    // 3. Show Name — strip/accent-bar/text all mirror based on corner.
+    // Left corners (stripDir=1): strip grows right from x=0, text left-aligned.
+    // Right corners (stripDir=-1): strip grows left from x=w, text right-aligned.
     if (showShowName) {
+      var stripX = (stripDir === 1) ? 0 : (w - stripW);
+      // Strip background sits just behind the text either way; for top
+      // corners it starts a little above nameY, for bottom corners it
+      // matches the original always-bottom band height (44*scale).
+      var stripTopY = nameIsTop ? (nameY - 10 * scale) : (h - 72 * scale);
       ctx.fillStyle = 'rgba(0,0,0,0.60)';
-      ctx.fillRect(0, h - 72 * scale, stripW, 44 * scale);
+      ctx.fillRect(stripX, stripTopY, stripW, 44 * scale);
       ctx.fillStyle = '#00FFD1';
-      ctx.fillRect(nameX, nameY - 2, 3 * scale, nameSize + 4);
+      var barX = (stripDir === 1) ? nameX : (w - nameX - 3 * scale);
+      ctx.fillRect(barX, nameY - 2, 3 * scale, nameSize + 4);
       ctx.fillStyle = '#ffffff';
       ctx.font = fontName;
       ctx.textBaseline = 'top';
-      ctx.fillText(showName.toUpperCase(), nameX + 10 * scale, nameY);
+      ctx.textAlign = (stripDir === 1) ? 'left' : 'right';
+      var textX = (stripDir === 1) ? (nameX + 10 * scale) : (w - nameX - 10 * scale);
+      ctx.fillText(showName.toUpperCase(), textX, nameY);
+      ctx.textAlign = 'left'; // reset default for other draw calls below
     }
 
-    // 4. Scrolling Ticker
+    // 4. Scrolling Ticker — always scrolls full width; tickerY (vertical
+    // position) is user-adjustable via the slider, computed in refreshCache.
     if (showTicker && tickerText) {
       ctx.fillStyle = 'rgba(0,0,0,0.80)';
       ctx.fillRect(0, tickerY, w, tickerH);
@@ -1883,7 +1937,13 @@ function handleImageUpload(slot, input) {
 }
 
 function setCorner(slot, corner) {
-  state.images[slot].corner = corner;
+  // 'showname' targets state.showName directly; everything else (logo,
+  // img1, img2) keeps the original state.images[slot] behavior unchanged.
+  if (slot === 'showname') {
+    state.showName.corner = corner;
+  } else {
+    state.images[slot].corner = corner;
+  }
   // Update active button
   var btns = document.querySelectorAll('#' + slot + 'CornerPicker .corner-btn');
   btns.forEach(function(b) { b.classList.remove('active'); });
