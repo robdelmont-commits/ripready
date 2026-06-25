@@ -1289,7 +1289,11 @@ function startRenderLoop(video, canvas) {
   // ── Cached values — only recomputed when inputs change ──
   var w = canvas.width;
   var h = canvas.height;
-  var scale = w / 1280;
+  // Scale relative to the 1280 reference dimension. Canvas is portrait
+  // (720x1280), so the reference is the HEIGHT, not the width — using
+  // w/1280 here previously produced scale=0.5625, shrinking the LIVE
+  // badge/show-name/ticker text to roughly half their designed size.
+  var scale = h / 1280;
 
   // Pre-compute crop rect once (camera dims don't change mid-stream)
   var srcX = 0, srcY = 0, srcW = 0, srcH = 0, cropReady = false;
