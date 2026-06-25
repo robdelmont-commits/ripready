@@ -743,6 +743,20 @@ body{
   accent-color:var(--teal);
   width:14px;height:14px;
 }
+.onboard-warning{
+  display:flex;align-items:flex-start;gap:6px;
+  background:rgba(255,184,0,0.12);
+  border:1px solid rgba(255,184,0,0.35);
+  border-radius:6px;
+  padding:8px 10px;
+  margin-top:8px;
+  font-size:11px;line-height:1.45;
+  color:var(--amber);
+}
+.onboard-warning i{
+  font-size:14px;flex-shrink:0;margin-top:1px;
+}
+.onboard-warning strong{font-weight:700;color:var(--text)}
 </style>
 </head>
 <body>
@@ -782,6 +796,10 @@ body{
         <div class="onboard-step-body">
           <div class="onboard-step-label">Connect on Whatnot</div>
           <div class="onboard-step-sub" id="onboardSub3">Go to your show &rarr; Stream via OBS Tools &rarr; Connect. You'll come back here automatically once it's done.</div>
+          <div class="onboard-warning">
+            <i class="ti ti-alert-triangle"></i>
+            <span>Open Whatnot in its <strong>own browser window</strong> &mdash; not a new tab next to RipReady. Two tabs in the same window will freeze your stream once you go live.</span>
+          </div>
           <a class="onboard-step-action" id="onboardAction3" href="https://www.whatnot.com" target="_blank" rel="noopener">Open Whatnot</a>
         </div>
       </div>
