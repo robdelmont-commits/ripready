@@ -1730,8 +1730,8 @@ async function goLive() {
     // = captureStream output). Dimness originates downstream in IVS encode.
     var cameraStream = videoTrack ? new LocalStageStream(videoTrack, {
       minBitrate: 1000,
-      maxBitrate: 3500,
-      initialBitrate: 2500
+      maxBitrate: 2500,
+      initialBitrate: 2000
     }) : null;
     var micStream = audioTrack ? new LocalStageStream(audioTrack) : null;
     console.log('[RipReady] Video source:', state.canvasStream ? 'canvas (composited)' : 'raw camera');
