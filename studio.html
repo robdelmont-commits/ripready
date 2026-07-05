@@ -476,6 +476,18 @@ body{
 .size-slider-row{display:flex;align-items:center;gap:8px;margin-top:8px}
 .size-slider-row label{font-size:11px;color:var(--muted2);white-space:nowrap}
 .size-slider-row input[type=range]{flex:1;accent-color:var(--accent)}
+
+/* Audio Mixer panel */
+.audio-strip{border:1px solid var(--border2);border-radius:8px;padding:10px 12px;margin-bottom:10px;background:var(--surface2)}
+.audio-strip-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.audio-strip-name{font-size:12px;font-weight:600;color:var(--text)}
+.audio-strip-sub{font-size:10px;color:var(--muted2)}
+.vu-meter{width:100%;height:8px;border-radius:4px;background:#1a1a1a;border:1px solid var(--border2);overflow:hidden;margin-bottom:8px;position:relative}
+.vu-meter-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--teal) 0%,var(--teal) 70%,#ffcc00 85%,var(--red) 100%);
+  transition:width .05s linear;border-radius:4px}
+.audio-select{width:100%;background:var(--surface2);border:1px solid var(--border2);color:var(--text);
+  border-radius:6px;padding:6px 8px;font-size:12px;margin-bottom:8px}
+.audio-empty-hint{font-size:11px;color:var(--muted2);line-height:1.5;padding:6px 0}
 .toggle{
   width:36px;height:20px;
   background:var(--border2);
@@ -924,6 +936,7 @@ body{
       <div class="panel-tab active" id="tab-stream" onclick="setPanel('stream')">Stream</div>
       <div class="panel-tab" id="tab-break" onclick="setPanel('break')">Break</div>
       <div class="panel-tab" id="tab-overlay" onclick="setPanel('overlay')">Overlay</div>
+      <div class="panel-tab" id="tab-audio" onclick="setPanel('audio')">Audio</div>
     </div>
 
     <!-- STREAM PANEL -->
@@ -1105,6 +1118,62 @@ body{
         </div>
       </div>
     </div>
+
+    <!-- AUDIO MIXER PANEL -->
+    <div class="panel-content" id="panel-audio">
+      <div class="ps-label">Microphone</div>
+      <div class="audio-strip">
+        <div class="audio-strip-head">
+          <span class="audio-strip-name">Mic Input</span>
+          <span class="audio-strip-sub" id="micGainLabel">100%</span>
+        </div>
+        <div class="vu-meter"><div class="vu-meter-fill" id="micMeter"></div></div>
+        <input type="range" id="micGainSlider" min="0" max="200" value="100"
+          oninput="setStripGain('mic', this.value)">
+      </div>
+
+      <div class="ps-label">Second Input <span style="color:var(--muted2);font-weight:400">(e.g. Vocaster, co-host mic)</span></div>
+      <div class="audio-strip">
+        <select class="audio-select" id="secondInputSelect" onchange="onSecondInputChange()">
+          <option value="">None</option>
+        </select>
+        <div class="audio-strip-head">
+          <span class="audio-strip-name">Second Input</span>
+          <span class="audio-strip-sub" id="secondGainLabel">100%</span>
+        </div>
+        <div class="vu-meter"><div class="vu-meter-fill" id="secondMeter"></div></div>
+        <input type="range" id="secondGainSlider" min="0" max="200" value="100"
+          oninput="setStripGain('second', this.value)" disabled>
+      </div>
+
+      <div class="ps-label">Background Music</div>
+      <div class="audio-strip">
+        <input type="file" id="musicFileInput" accept="audio/*" onchange="handleMusicUpload(this)">
+        <div style="display:flex;gap:6px;margin:8px 0">
+          <button class="btn btn-ghost btn-sm" style="flex:1" id="musicPlayBtn" onclick="toggleMusic()" disabled>
+            <i class="ti ti-player-play"></i> Play
+          </button>
+          <div class="toggle" id="tog-musicLoop" onclick="toggleMusicLoop()" title="Loop"></div>
+        </div>
+        <div class="audio-strip-head">
+          <span class="audio-strip-name">Music Bed</span>
+          <span class="audio-strip-sub" id="musicGainLabel">60%</span>
+        </div>
+        <div class="vu-meter"><div class="vu-meter-fill" id="musicMeter"></div></div>
+        <input type="range" id="musicGainSlider" min="0" max="200" value="60"
+          oninput="setStripGain('music', this.value)">
+        <audio id="musicElement" loop style="display:none"></audio>
+      </div>
+
+      <div class="ps-label">Combined Output</div>
+      <div class="audio-strip">
+        <div class="audio-strip-head">
+          <span class="audio-strip-name">Master (what goes to Whatnot)</span>
+        </div>
+        <div class="vu-meter"><div class="vu-meter-fill" id="masterMeter"></div></div>
+        <div class="audio-empty-hint" id="audioMixerHint">Start your camera to activate the mixer.</div>
+      </div>
+    </div>
   </div>
 
 </div>
@@ -1139,6 +1208,27 @@ var state = {
   // bottom. The ticker itself still scrolls horizontally edge-to-edge.
   tickerYFraction: 1,
   drag: { active: false, slot: null, offsetX: 0, offsetY: 0 },
+  // Web Audio mixer — combines mic + optional second input + music bed into
+  // one MediaStreamTrack that replaces the raw mic track when publishing.
+  // Built this way (rather than relying on OBS-style hardware mixing) so it
+  // works identically whether someone streams from a phone with one mic or
+  // a laptop with an audio interface feeding a second input.
+  audio: {
+    ctx: null,
+    destNode: null,        // MediaStreamAudioDestinationNode — the final mixed output
+    mixedTrack: null,      // the track actually published to IVS
+    outAnalyser: null,
+    micGainNode: null,
+    micAnalyser: null,
+    secondStream: null,
+    secondSourceNode: null,
+    secondGainNode: null,
+    secondAnalyser: null,
+    musicSourceNode: null,
+    musicGainNode: null,
+    musicAnalyser: null,
+    meterRAF: null,
+  },
 };
 
 var templates = {
@@ -1167,7 +1257,7 @@ function toggleHolding() {
 
 function setPanel(p) {
   state.panel = p;
-  ['stream','break','overlay'].forEach(function(id){
+  ['stream','break','overlay','audio'].forEach(function(id){
     document.getElementById('tab-'+id).classList.toggle('active', id===p);
     document.getElementById('panel-'+id).classList.toggle('active', id===p);
     var navEl = document.getElementById('nav-'+id);
@@ -1206,6 +1296,11 @@ function startCamera() {
   navigator.mediaDevices.getUserMedia(constraints).then(function(stream){
     state.mediaStream = stream;
     state.cameraActive = true;
+
+    // Build the Web Audio mixer graph off the mic track we just got. This is
+    // what lets a phone streamer with one mic and a laptop streamer with a
+    // second interface both end up with one clean, level-controlled track.
+    initAudioMixer(stream);
 
     // Feed raw stream into hidden video element (source for canvas)
     var video = document.getElementById('cameraVideo');
@@ -1276,6 +1371,7 @@ async function stopCamera() {
     state.canvasStream.getTracks().forEach(function(track) { track.stop(); });
     state.canvasStream = null;
   }
+  teardownAudioMixer();
   state.cameraActive = false;
   state.autoTriggerPending = false;
 
@@ -1294,6 +1390,227 @@ async function stopCamera() {
 
 function switchCamera() {
   if(state.cameraActive) startCamera();
+}
+
+// ── AUDIO MIXER ──
+// Combines mic + optional second input + music bed into one Web Audio graph,
+// then captures the graph's output as a single MediaStreamTrack via a
+// MediaStreamAudioDestinationNode. That mixed track is what goLive() publishes
+// instead of the raw mic track. Works the same on a phone (mic only) or a
+// laptop with a second interface (e.g. a Vocaster) — the browser only ever
+// needs to grab one input device; any further mixing happens here in JS
+// rather than relying on hardware mixing like OBS users are used to.
+function initAudioMixer(micStream) {
+  var a = state.audio;
+  var micTrack = micStream.getAudioTracks()[0];
+  if (!micTrack) {
+    document.getElementById('audioMixerHint').textContent = 'No microphone detected.';
+    return;
+  }
+
+  var AC = window.AudioContext || window.webkitAudioContext;
+  a.ctx = new AC();
+  a.destNode = a.ctx.createMediaStreamDestination();
+
+  // Mic strip
+  var micSource = a.ctx.createMediaStreamSource(new MediaStream([micTrack]));
+  a.micGainNode = a.ctx.createGain();
+  a.micGainNode.gain.value = document.getElementById('micGainSlider').value / 100;
+  a.micAnalyser = a.ctx.createAnalyser();
+  a.micAnalyser.fftSize = 256;
+  micSource.connect(a.micGainNode).connect(a.micAnalyser).connect(a.destNode);
+
+  // Master output meter (post-mix)
+  a.outAnalyser = a.ctx.createAnalyser();
+  a.outAnalyser.fftSize = 256;
+  a.destNode.stream.getAudioTracks().forEach(function(){}); // no-op, keeps intent clear
+  // Tap the destination by re-routing every strip through a shared point
+  // isn't possible post-hoc, so we approximate master level as the loudest
+  // of the active strips' analysers — see updateMeters().
+
+  a.mixedTrack = a.destNode.stream.getAudioTracks()[0];
+
+  document.getElementById('audioMixerHint').textContent =
+    'Mixer active — this combined level is what publishes to Whatnot.';
+
+  populateAudioInputs();
+  startMeterLoop();
+}
+
+function teardownAudioMixer() {
+  var a = state.audio;
+  if (a.meterRAF) cancelAnimationFrame(a.meterRAF);
+  a.meterRAF = null;
+  if (a.secondStream) {
+    a.secondStream.getTracks().forEach(function(t){ t.stop(); });
+    a.secondStream = null;
+  }
+  var musicEl = document.getElementById('musicElement');
+  musicEl.pause();
+  if (a.ctx) {
+    a.ctx.close().catch(function(){});
+  }
+  state.audio = {
+    ctx: null, destNode: null, mixedTrack: null, outAnalyser: null,
+    micGainNode: null, micAnalyser: null,
+    secondStream: null, secondSourceNode: null, secondGainNode: null, secondAnalyser: null,
+    musicSourceNode: null, musicGainNode: null, musicAnalyser: null,
+    meterRAF: null,
+  };
+  ['micMeter','secondMeter','musicMeter','masterMeter'].forEach(function(id){
+    document.getElementById(id).style.width = '0%';
+  });
+  document.getElementById('audioMixerHint').textContent = 'Start your camera to activate the mixer.';
+}
+
+// Lists audio input devices for the optional Second Input strip (e.g. a
+// Vocaster or other interface feeding a co-host/Bluetooth return). Devices
+// only get real labels after permission has been granted once, which
+// startCamera()'s getUserMedia call already did.
+function populateAudioInputs() {
+  navigator.mediaDevices.enumerateDevices().then(function(devices){
+    var sel = document.getElementById('secondInputSelect');
+    sel.innerHTML = '<option value="">None</option>';
+    devices.filter(function(d){ return d.kind === 'audioinput'; }).forEach(function(d, i){
+      var opt = document.createElement('option');
+      opt.value = d.deviceId;
+      opt.textContent = d.label || 'Audio Input ' + (i + 1);
+      sel.appendChild(opt);
+    });
+  }).catch(function(){});
+}
+
+function onSecondInputChange() {
+  var deviceId = document.getElementById('secondInputSelect').value;
+  var a = state.audio;
+
+  // Clear any existing second input first
+  if (a.secondStream) {
+    a.secondStream.getTracks().forEach(function(t){ t.stop(); });
+    a.secondStream = null;
+    a.secondSourceNode = null;
+  }
+  document.getElementById('secondGainSlider').disabled = true;
+  document.getElementById('secondMeter').style.width = '0%';
+
+  if (!deviceId || !a.ctx) return;
+
+  navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: deviceId } } }).then(function(stream){
+    a.secondStream = stream;
+    var track = stream.getAudioTracks()[0];
+    if (!track) return;
+    a.secondSourceNode = a.ctx.createMediaStreamSource(new MediaStream([track]));
+    a.secondGainNode = a.ctx.createGain();
+    a.secondGainNode.gain.value = document.getElementById('secondGainSlider').value / 100;
+    a.secondAnalyser = a.ctx.createAnalyser();
+    a.secondAnalyser.fftSize = 256;
+    a.secondSourceNode.connect(a.secondGainNode).connect(a.secondAnalyser).connect(a.destNode);
+    document.getElementById('secondGainSlider').disabled = false;
+  }).catch(function(e){
+    console.error('Second input error:', e);
+    showError('Could not open that audio input.');
+  });
+}
+
+function handleMusicUpload(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var a = state.audio;
+  var musicEl = document.getElementById('musicElement');
+  musicEl.src = URL.createObjectURL(file);
+
+  // Only wire the Web Audio graph once — createMediaElementSource can only
+  // be called a single time per <audio> element.
+  if (a.ctx && !a.musicSourceNode) {
+    a.musicSourceNode = a.ctx.createMediaElementSource(musicEl);
+    a.musicGainNode = a.ctx.createGain();
+    a.musicGainNode.gain.value = document.getElementById('musicGainSlider').value / 100;
+    a.musicAnalyser = a.ctx.createAnalyser();
+    a.musicAnalyser.fftSize = 256;
+    // Connect to both the mix (for the stream) and local speakers (so the
+    // streamer can hear what's playing while cueing it up).
+    a.musicSourceNode.connect(a.musicGainNode);
+    a.musicGainNode.connect(a.musicAnalyser).connect(a.destNode);
+    a.musicGainNode.connect(a.ctx.destination);
+  }
+  document.getElementById('musicPlayBtn').disabled = false;
+}
+
+function toggleMusic() {
+  var musicEl = document.getElementById('musicElement');
+  var btn = document.getElementById('musicPlayBtn');
+  if (musicEl.paused) {
+    musicEl.play();
+    btn.innerHTML = '<i class="ti ti-player-pause"></i> Pause';
+  } else {
+    musicEl.pause();
+    btn.innerHTML = '<i class="ti ti-player-play"></i> Play';
+  }
+}
+
+function toggleMusicLoop() {
+  var musicEl = document.getElementById('musicElement');
+  musicEl.loop = !musicEl.loop;
+  document.getElementById('tog-musicLoop').classList.toggle('on', musicEl.loop);
+}
+
+// Shared handler for all three gain sliders — 0-200 maps to 0x-2x gain so
+// there's headroom to boost a quiet input, not just attenuate a loud one.
+function setStripGain(strip, value) {
+  var a = state.audio;
+  var pct = value + '%';
+  if (strip === 'mic' && a.micGainNode) {
+    a.micGainNode.gain.value = value / 100;
+    document.getElementById('micGainLabel').textContent = pct;
+  } else if (strip === 'second' && a.secondGainNode) {
+    a.secondGainNode.gain.value = value / 100;
+    document.getElementById('secondGainLabel').textContent = pct;
+  } else if (strip === 'music' && a.musicGainNode) {
+    a.musicGainNode.gain.value = value / 100;
+    document.getElementById('musicGainLabel').textContent = pct;
+  } else if (strip === 'mic') {
+    document.getElementById('micGainLabel').textContent = pct;
+  } else if (strip === 'second') {
+    document.getElementById('secondGainLabel').textContent = pct;
+  } else if (strip === 'music') {
+    document.getElementById('musicGainLabel').textContent = pct;
+  }
+}
+
+// Reads each active analyser's current level (RMS off time-domain data,
+// which reads more like a natural VU meter than frequency-bin data) and
+// paints the corresponding meter bar. Master approximates the mixed level
+// as the loudest currently-active strip, since AnalyserNode can only be
+// read from a fixed graph position and we didn't want to add an extra
+// analyser hop after the destination node (destination nodes can't fan out
+// to a following analyser — they're a terminal node).
+function readLevel(analyser) {
+  if (!analyser) return 0;
+  var data = new Uint8Array(analyser.fftSize);
+  analyser.getByteTimeDomainData(data);
+  var sum = 0;
+  for (var i = 0; i < data.length; i++) {
+    var v = (data[i] - 128) / 128;
+    sum += v * v;
+  }
+  var rms = Math.sqrt(sum / data.length);
+  return Math.min(1, rms * 3.5); // scaled for a more readable meter swing
+}
+
+function startMeterLoop() {
+  var a = state.audio;
+  function tick() {
+    var mic = readLevel(a.micAnalyser);
+    var second = readLevel(a.secondAnalyser);
+    var music = readLevel(a.musicAnalyser);
+    var master = Math.max(mic, second, music);
+    document.getElementById('micMeter').style.width = (mic * 100).toFixed(0) + '%';
+    document.getElementById('secondMeter').style.width = (second * 100).toFixed(0) + '%';
+    document.getElementById('musicMeter').style.width = (music * 100).toFixed(0) + '%';
+    document.getElementById('masterMeter').style.width = (master * 100).toFixed(0) + '%';
+    a.meterRAF = requestAnimationFrame(tick);
+  }
+  tick();
 }
 
 // ── CANVAS RENDER LOOP ──
@@ -1723,7 +2040,11 @@ async function goLive() {
     // Fall back to raw camera if canvas stream not ready
     var videoTrack = (state.canvasStream && state.canvasStream.getVideoTracks()[0])
                      || state.mediaStream.getVideoTracks()[0];
-    var audioTrack = state.mediaStream.getAudioTracks()[0];
+    // Prefer the mixed track from the Audio Mixer (mic + optional second
+    // input + music bed) so levels set in the Audio panel actually reach
+    // Whatnot. Falls back to the raw mic track if the mixer never
+    // initialized for some reason.
+    var audioTrack = (state.audio.mixedTrack) || state.mediaStream.getAudioTracks()[0];
     // Explicit bitrate config — IVS defaults are too conservative and produce
     // visible compression flattening/dimness on the Whatnot output.
     // Diagnostic confirmed: canvas pipeline is clean (raw camera = canvas draw
