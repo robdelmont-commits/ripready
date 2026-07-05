@@ -1724,7 +1724,15 @@ async function goLive() {
     var videoTrack = (state.canvasStream && state.canvasStream.getVideoTracks()[0])
                      || state.mediaStream.getVideoTracks()[0];
     var audioTrack = state.mediaStream.getAudioTracks()[0];
-    var cameraStream = videoTrack ? new LocalStageStream(videoTrack) : null;
+    // Explicit bitrate config — IVS defaults are too conservative and produce
+    // visible compression flattening/dimness on the Whatnot output.
+    // Diagnostic confirmed: canvas pipeline is clean (raw camera = canvas draw
+    // = captureStream output). Dimness originates downstream in IVS encode.
+    var cameraStream = videoTrack ? new LocalStageStream(videoTrack, {
+      minBitrate: 1000,
+      maxBitrate: 3500,
+      initialBitrate: 2500
+    }) : null;
     var micStream = audioTrack ? new LocalStageStream(audioTrack) : null;
     console.log('[RipReady] Video source:', state.canvasStream ? 'canvas (composited)' : 'raw camera');
 
