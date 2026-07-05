@@ -1324,7 +1324,7 @@ function startRenderLoop(video, canvas) {
   var fontName   = 'bold ' + Math.round(28 * scale) + 'px Barlow Condensed, sans-serif';
   // Bumped 14 -> 18: still read as small on the actual broadcast even after
   // the scale fix. Re-check on real output; raise further if still thin.
-  var fontTicker = Math.round(18 * scale) + 'px Barlow Condensed, sans-serif';
+  var fontTicker = 'bold ' + Math.round(32 * scale) + 'px Barlow Condensed, sans-serif';
 
   // Pre-compute badge geometry
   var badgeW = 90 * scale, badgeH = 34 * scale;
@@ -1338,7 +1338,7 @@ function startRenderLoop(video, canvas) {
 
   // Ticker geometry — horizontal scroll always spans full width; only the
   // vertical position (tickerY) is adjustable, recomputed in refreshCache().
-  var tickerH = 32 * scale, tickerY = h - tickerH;
+  var tickerH = 56 * scale, tickerY = h - tickerH;
   var tickerX = null;
   var speed = 1.2 * scale;
 
