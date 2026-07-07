@@ -1,8 +1,84 @@
-RipReady Privacy Policy
-Last updated: July 6, 2026
-RipReady ("we," "our") operates ripready.app and the RipReady Chrome extension, a browser-based live streaming tool for Whatnot sellers.
-What we collect: The RipReady Chrome extension detects a single, specific local connection attempt made by Whatnot's own website (a WebSocket request to your local machine, standard OBS Studio behavior) and relays the resulting live-stream authorization token to RipReady's backend. This token is used solely to establish your live stream session through RipReady's studio.
-What we don't collect: The extension does not read, log, or transmit your browsing history, personal files, passwords, or any content on websites other than whatnot.com. It does not access camera or microphone data beyond what's needed to run your own live stream, which you initiate directly.
-Where data goes: The stream authorization token is passed through our relay server (Railway) and stored temporarily in our database (Supabase) solely to activate your live stream. It is not sold, shared, or used for advertising, and is not used for any purpose beyond enabling your Whatnot broadcast.
-Data retention: Tokens are per-broadcast and are replaced/discarded on each new session.
-Contact: robdelmont@gmail.com
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RipReady — Privacy Policy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,600;0,700;0,800;1,400;1,700;1,800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #080808;
+    color: #eaeaea;
+    font-family: 'Barlow', sans-serif;
+    line-height: 1.6;
+  }
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 64px 24px 96px;
+  }
+  a { color: #00FFD1; }
+  h1 {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 40px;
+    color: #ffffff;
+    margin-bottom: 8px;
+  }
+  .updated {
+    color: #888;
+    font-size: 14px;
+    margin-bottom: 40px;
+  }
+  h2 {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 22px;
+    color: #00FFD1;
+    margin-top: 40px;
+    margin-bottom: 12px;
+  }
+  p { margin-bottom: 16px; color: #cfcfcf; font-size: 16px; }
+  .rule { border: none; border-top: 1px solid #222; margin: 48px 0 32px; }
+  .brand {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 800;
+    color: #00FFD1;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Privacy Policy</h1>
+  <div class="updated">Last updated: July 6, 2026</div>
+
+  <p><span class="brand">RipReady</span> ("we," "our") operates <a href="https://ripready.app">ripready.app</a> and the RipReady Chrome extension, a browser-based live streaming tool for Whatnot sellers.</p>
+
+  <h2>What We Collect</h2>
+  <p>The RipReady Chrome extension detects a single, specific local connection attempt made by Whatnot's own website (a WebSocket request to your local machine, standard OBS Studio behavior) and relays the resulting live-stream authorization token to RipReady's backend. This token is used solely to establish your live stream session through the RipReady studio.</p>
+
+  <h2>What We Don't Collect</h2>
+  <p>The extension does not read, log, or transmit your browsing history, personal files, passwords, or any content on websites other than whatnot.com. It does not access camera or microphone data beyond what's needed to run your own live stream, which you initiate directly in your browser.</p>
+
+  <h2>Where Data Goes</h2>
+  <p>The stream authorization token is passed through our relay server (Railway) and stored temporarily in our database (Supabase) solely to activate your live stream. It is not sold, shared with third parties, or used for advertising, and is not used for any purpose beyond enabling your Whatnot broadcast.</p>
+
+  <h2>Data Retention</h2>
+  <p>Tokens are per-broadcast and are replaced or discarded on each new session.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy can be sent to <a href="mailto:robdelmont@gmail.com">robdelmont@gmail.com</a>.</p>
+
+  <hr class="rule">
+  <p style="font-size: 13px; color: #666;">RipReady — Go live in minutes. Any device.</p>
+</div>
+</body>
+</html>
