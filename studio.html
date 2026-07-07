@@ -1146,7 +1146,24 @@ body{
           oninput="setStripGain('second', this.value)" disabled>
       </div>
 
-      <div class="ps-label">Background Music</div>
+      <div class="ps-label">Streaming Audio <span style="color:var(--muted2);font-weight:400">(Spotify, Apple Music — from a browser tab)</span></div>
+      <div class="audio-strip">
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <button class="btn btn-ghost btn-sm" style="flex:1" id="tabCaptureBtn" onclick="captureTabAudio()">
+            <i class="ti ti-device-tv"></i> Capture Tab Audio
+          </button>
+        </div>
+        <div class="audio-empty-hint" id="tabAudioHint">Open your music service in another tab, then click Capture and check "Share tab audio."</div>
+        <div class="audio-strip-head">
+          <span class="audio-strip-name">Streaming Audio</span>
+          <span class="audio-strip-sub" id="tabGainLabel">80%</span>
+        </div>
+        <div class="vu-meter"><div class="vu-meter-fill" id="tabMeter"></div></div>
+        <input type="range" id="tabGainSlider" min="0" max="200" value="80"
+          oninput="setStripGain('tab', this.value)" disabled>
+      </div>
+
+      <div class="ps-label">Background Music <span style="color:var(--muted2);font-weight:400">(uploaded file)</span></div>
       <div class="audio-strip">
         <input type="file" id="musicFileInput" accept="audio/*" onchange="handleMusicUpload(this)">
         <div style="display:flex;gap:6px;margin:8px 0">
@@ -1224,6 +1241,10 @@ var state = {
     secondSourceNode: null,
     secondGainNode: null,
     secondAnalyser: null,
+    tabStream: null,
+    tabSourceNode: null,
+    tabGainNode: null,
+    tabAnalyser: null,
     musicSourceNode: null,
     musicGainNode: null,
     musicAnalyser: null,
@@ -1445,6 +1466,10 @@ function teardownAudioMixer() {
     a.secondStream.getTracks().forEach(function(t){ t.stop(); });
     a.secondStream = null;
   }
+  if (a.tabStream) {
+    a.tabStream.getTracks().forEach(function(t){ t.stop(); });
+    a.tabStream = null;
+  }
   var musicEl = document.getElementById('musicElement');
   musicEl.pause();
   if (a.ctx) {
@@ -1454,12 +1479,17 @@ function teardownAudioMixer() {
     ctx: null, destNode: null, mixedTrack: null, outAnalyser: null,
     micGainNode: null, micAnalyser: null,
     secondStream: null, secondSourceNode: null, secondGainNode: null, secondAnalyser: null,
+    tabStream: null, tabSourceNode: null, tabGainNode: null, tabAnalyser: null,
     musicSourceNode: null, musicGainNode: null, musicAnalyser: null,
     meterRAF: null,
   };
-  ['micMeter','secondMeter','musicMeter','masterMeter'].forEach(function(id){
+  ['micMeter','secondMeter','tabMeter','musicMeter','masterMeter'].forEach(function(id){
     document.getElementById(id).style.width = '0%';
   });
+  document.getElementById('tabCaptureBtn').disabled = false;
+  document.getElementById('tabCaptureBtn').innerHTML = '<i class="ti ti-device-tv"></i> Capture Tab Audio';
+  document.getElementById('tabGainSlider').disabled = true;
+  document.getElementById('tabAudioHint').textContent = 'Open your music service in another tab, then click Capture and check "Share tab audio."';
   document.getElementById('audioMixerHint').textContent = 'Start your camera to activate the mixer.';
 }
 
@@ -1510,6 +1540,78 @@ function onSecondInputChange() {
     console.error('Second input error:', e);
     showError('Could not open that audio input.');
   });
+}
+
+// Captures audio from a browser tab (e.g. Spotify/Apple Music web player)
+// via getDisplayMedia. Chrome requires video:true in the request even though
+// we only want the audio track — we stop the video track immediately after
+// grabbing the stream so no video capture actually happens. Only works when
+// the user shares a TAB with "Share tab audio" checked; sharing a window or
+// the whole screen does not reliably carry audio cross-platform (true
+// desktop-audio capture is Windows-only at the OS level, so we don't build
+// around that path — tab capture is the one that works the same on Mac).
+function captureTabAudio() {
+  var a = state.audio;
+  if (!a.ctx) {
+    showError('Start your camera first — the mixer needs to be active.');
+    return;
+  }
+  if (!navigator.mediaDevices.getDisplayMedia) {
+    showError('Tab audio capture isn\'t supported in this browser.');
+    return;
+  }
+
+  navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }).then(function(stream){
+    var audioTrack = stream.getAudioTracks()[0];
+    stream.getVideoTracks().forEach(function(t){ t.stop(); }); // discard video, audio only
+
+    if (!audioTrack) {
+      stream.getTracks().forEach(function(t){ t.stop(); });
+      showError('No audio came through — make sure "Share tab audio" was checked.');
+      return;
+    }
+
+    // Clear any previous tab capture before wiring the new one
+    if (a.tabStream) {
+      a.tabStream.getTracks().forEach(function(t){ t.stop(); });
+    }
+
+    a.tabStream = stream;
+    a.tabSourceNode = a.ctx.createMediaStreamSource(new MediaStream([audioTrack]));
+    a.tabGainNode = a.ctx.createGain();
+    a.tabGainNode.gain.value = document.getElementById('tabGainSlider').value / 100;
+    a.tabAnalyser = a.ctx.createAnalyser();
+    a.tabAnalyser.fftSize = 256;
+    a.tabSourceNode.connect(a.tabGainNode).connect(a.tabAnalyser).connect(a.destNode);
+
+    document.getElementById('tabGainSlider').disabled = false;
+    document.getElementById('tabAudioHint').textContent = 'Capturing — this tab\'s audio is now mixed into the broadcast.';
+    document.getElementById('tabCaptureBtn').innerHTML = '<i class="ti ti-player-stop"></i> Stop Capture';
+    document.getElementById('tabCaptureBtn').onclick = stopTabAudio;
+
+    // If the user ends sharing from Chrome's own "Stop sharing" bar instead
+    // of our button, clean up the strip the same way.
+    audioTrack.addEventListener('ended', stopTabAudio);
+  }).catch(function(e){
+    console.error('Tab audio capture error:', e);
+    showError('Tab audio capture was cancelled or blocked.');
+  });
+}
+
+function stopTabAudio() {
+  var a = state.audio;
+  if (a.tabStream) {
+    a.tabStream.getTracks().forEach(function(t){ t.stop(); });
+    a.tabStream = null;
+  }
+  a.tabSourceNode = null;
+  a.tabGainNode = null;
+  a.tabAnalyser = null;
+  document.getElementById('tabMeter').style.width = '0%';
+  document.getElementById('tabGainSlider').disabled = true;
+  document.getElementById('tabAudioHint').textContent = 'Open your music service in another tab, then click Capture and check "Share tab audio."';
+  document.getElementById('tabCaptureBtn').innerHTML = '<i class="ti ti-device-tv"></i> Capture Tab Audio';
+  document.getElementById('tabCaptureBtn').onclick = captureTabAudio;
 }
 
 function handleMusicUpload(input) {
@@ -1565,6 +1667,9 @@ function setStripGain(strip, value) {
   } else if (strip === 'second' && a.secondGainNode) {
     a.secondGainNode.gain.value = value / 100;
     document.getElementById('secondGainLabel').textContent = pct;
+  } else if (strip === 'tab' && a.tabGainNode) {
+    a.tabGainNode.gain.value = value / 100;
+    document.getElementById('tabGainLabel').textContent = pct;
   } else if (strip === 'music' && a.musicGainNode) {
     a.musicGainNode.gain.value = value / 100;
     document.getElementById('musicGainLabel').textContent = pct;
@@ -1572,6 +1677,8 @@ function setStripGain(strip, value) {
     document.getElementById('micGainLabel').textContent = pct;
   } else if (strip === 'second') {
     document.getElementById('secondGainLabel').textContent = pct;
+  } else if (strip === 'tab') {
+    document.getElementById('tabGainLabel').textContent = pct;
   } else if (strip === 'music') {
     document.getElementById('musicGainLabel').textContent = pct;
   }
@@ -1602,10 +1709,12 @@ function startMeterLoop() {
   function tick() {
     var mic = readLevel(a.micAnalyser);
     var second = readLevel(a.secondAnalyser);
+    var tab = readLevel(a.tabAnalyser);
     var music = readLevel(a.musicAnalyser);
-    var master = Math.max(mic, second, music);
+    var master = Math.max(mic, second, tab, music);
     document.getElementById('micMeter').style.width = (mic * 100).toFixed(0) + '%';
     document.getElementById('secondMeter').style.width = (second * 100).toFixed(0) + '%';
+    document.getElementById('tabMeter').style.width = (tab * 100).toFixed(0) + '%';
     document.getElementById('musicMeter').style.width = (music * 100).toFixed(0) + '%';
     document.getElementById('masterMeter').style.width = (master * 100).toFixed(0) + '%';
     a.meterRAF = requestAnimationFrame(tick);
