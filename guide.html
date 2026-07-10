@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RipReady — Go Live Guide</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --black:#080808;
+    --panel:#101010;
+    --panel2:#141414;
+    --teal:#00FFD1;
+    --teal-dim:rgba(0,255,209,0.14);
+    --line:rgba(255,255,255,0.09);
+    --text:#F2F2F0;
+    --muted:#8a8a86;
+    --amber:#FFB020;
+    --amber-dim:rgba(255,176,32,0.12);
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--black);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
+    line-height:1.5;
+  }
+  .wrap{max-width:760px;margin:0 auto;padding:64px 22px 90px;}
+
+  /* header */
+  .eyebrow{
+    font-family:'Barlow Condensed',sans-serif;
+    font-weight:600;
+    letter-spacing:0.26em;
+    text-transform:uppercase;
+    font-size:12px;
+    color:var(--teal);
+    margin-bottom:14px;
+  }
+  h1{
+    font-family:'Barlow Condensed',sans-serif;
+    font-weight:800;
+    font-size:56px;
+    line-height:0.98;
+    margin:0 0 18px;
+    letter-spacing:-0.01em;
+  }
+  h1 span{color:var(--teal);}
+  .lede{
+    font-size:17px;
+    color:var(--muted);
+    max-width:520px;
+    margin:0 0 8px;
+  }
+  .time-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    margin-top:22px;
+    font-family:'Barlow Condensed',sans-serif;
+    font-weight:600;
+    font-size:13px;
+    letter-spacing:0.04em;
+    color:var(--text);
+    background:var(--panel2);
+    border:1px solid var(--line);
+    padding:7px 14px 7px 12px;
+    border-radius:100px;
+  }
+  .time-pill .dot{width:6px;height:6px;border-radius:50%;background:var(--teal);}
+
+  /* steps */
+  .steps{margin-top:56px;}
+  .step{
+    display:grid;
+    grid-template-columns:56px 1fr;
+    gap:20px;
+    padding:40px 0;
+    border-top:1px solid var(--line);
+  }
+  .step:first-child{border-top:1px solid var(--line);}
+  .step-num{
+    font-family:'Barlow Condensed',sans-serif;
+    font-weight:800;
+    font-size:34px;
+    color:var(--panel2);
+    -webkit-text-stroke:1px var(--teal);
+    line-height:1;
+    padding-top:4px;
+  }
+  .step-label{
+    font-family:'Barlow Condensed',sans-serif;
+    font-weight:700;
+    font-size:26px;
+    margin:0 0 8px;
+  }
+  .step-desc{
+    color:var(--muted);
+    font-size:15px;
+    max-width:480px;
+    margin:0 0 20px;
+  }
+  .step-desc strong{color:var(--text);font-weight:600;}
+
+  /* browser chrome mockup */
+  .mock{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    overflow:hidden;
+    max-width:560px;
+  }
+  .mock-bar{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:9px 12px;
+    background:var(--panel2);
+    border-bottom:1px solid var(--line);
+  }
+  .mock-dot{width:9px;height:9px;border-radius:50%;background:#3a3a3a;}
+  .mock-url{
+    flex:1;
+    font-family:'Inter',sans-serif;
+    font-size:11.5px;
+    color:var(--muted);
+    background:var(--black);
+    border-radius:5px;
+    padding:4px 10px;
+    margin-left:4px;
+  }
+  .mock-body{padding:20px;}
+
+  /* generic mock elements */
+  .m-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .m-title{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;color:var(--text);}
+  .m-sub{font-size:12px;color:var(--muted);margin-top:2px;}
+  .m-btn{
+    font-family:'Barlow Condensed',sans-serif;
+    font-weight:700;
+    font-size:12.5px;
+    letter-spacing:0.02em;
+    background:var(--teal);
+    color:var(--black);
+    padding:9px 16px;
+    border-radius:7px;
+    white-space:nowrap;
+  }
+  .m-btn.ghost{
+    background:transparent;
+    border:1px solid var(--line);
+    color:var(--text);
+  }
+  .m-card{
+    background:var(--panel2);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:14px 16px;
+    margin-top:12px;
+  }
+  .m-tabs{display:flex;gap:18px;border-bottom:1px solid var(--line);margin-bottom:16px;padding-bottom:10px;}
+  .m-tab{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:13px;color:var(--muted);}
+  .m-tab.active{color:var(--teal);}
+  .m-corner-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px;}
+  .m-corner{
+    font-family:'Barlow Condensed',sans-serif;
+    font-size:11px;
+    text-align:center;
+    padding:6px 4px;
+    border-radius:5px;
+    border:1px solid var(--line);
+    color:var(--muted);
+  }
+  .m-corner.active{border-color:var(--teal);color:var(--teal);background:var(--teal-dim);}
+  .m-dot-row{display:flex;align-items:center;gap:8px;}
+  .m-live-dot{width:7px;height:7px;border-radius:50%;background:#ff3b30;}
+
+  /* two window diagram */
+  .split-mock{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:560px;}
+  .split-mock .mock{max-width:none;}
+  .arrow-between{
+    grid-column:1/-1;
+    text-align:center;
+    font-family:'Barlow Condensed',sans-serif;
+    font-size:12px;
+    color:var(--muted);
+    letter-spacing:0.05em;
+    text-transform:uppercase;
+    margin:2px 0;
+  }
+
+  /* warning callout */
+  .warn{
+    display:flex;
+    gap:12px;
+    background:var(--amber-dim);
+    border:1px solid rgba(255,176,32,0.35);
+    border-radius:8px;
+    padding:14px 16px;
+    margin-top:18px;
+    max-width:560px;
+  }
+  .warn i{
+    font-style:normal;
+    font-family:'Barlow Condensed',sans-serif;
+    font-weight:800;
+    color:var(--amber);
+    font-size:15px;
+    flex-shrink:0;
+  }
+  .warn p{margin:0;font-size:13.5px;color:var(--text);}
+  .warn strong{color:var(--amber);}
+
+  /* connect flow diagram (step 3->4) */
+  .flow{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-top:4px;
+  }
+  .flow-node{
+    font-family:'Barlow Condensed',sans-serif;
+    font-weight:600;
+    font-size:12.5px;
+    background:var(--panel2);
+    border:1px solid var(--line);
+    padding:7px 12px;
+    border-radius:6px;
+    color:var(--text);
+  }
+  .flow-node.teal{border-color:var(--teal);color:var(--teal);}
+  .flow-sep{color:var(--muted);font-size:13px;}
+
+  /* footer */
+  .footer{
+    margin-top:60px;
+    padding-top:32px;
+    border-top:1px solid var(--line);
+  }
+  .footer-title{
+    font-family:'Barlow Condensed',sans-serif;
+    font-weight:700;
+    font-size:20px;
+    margin:0 0 8px;
+  }
+  .footer p{color:var(--muted);font-size:14px;max-width:480px;margin:0;}
+  .footer a{color:var(--teal);text-decoration:none;}
+  .footer a:hover{text-decoration:underline;}
+
+  @media (max-width:640px){
+    h1{font-size:40px;}
+    .step{grid-template-columns:40px 1fr;gap:14px;}
+    .step-num{font-size:26px;}
+    .split-mock{grid-template-columns:1fr;}
+    .mock-body{padding:16px;}
+  }
+
+  @media (prefers-reduced-motion:no-preference){
+    .step{animation:rise 0.5s ease both;}
+    .step:nth-child(1){animation-delay:0.02s;}
+    .step:nth-child(2){animation-delay:0.06s;}
+    .step:nth-child(3){animation-delay:0.10s;}
+    .step:nth-child(4){animation-delay:0.14s;}
+    .step:nth-child(5){animation-delay:0.18s;}
+    @keyframes rise{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">RipReady Setup</div>
+  <h1>Go live in<br><span>five minutes.</span></h1>
+  <p class="lede">No OBS, no config files, no hardware box under your desk. Just a browser tab and a camera.</p>
+  <div class="time-pill"><span class="dot"></span> 5 steps · under 5 minutes</div>
+
+  <div class="steps">
+
+    <!-- STEP 1 -->
+    <div class="step">
+      <div class="step-num">1</div>
+      <div>
+        <h2 class="step-label">Install the extension</h2>
+        <p class="step-desc">This is what lets RipReady talk to Whatnot. One click, no setup screen.</p>
+        <div class="mock">
+          <div class="mock-bar">
+            <div class="mock-dot"></div><div class="mock-dot"></div><div class="mock-dot"></div>
+            <div class="mock-url">chromewebstore.google.com/detail/ripready</div>
+          </div>
+          <div class="mock-body">
+            <div class="m-row">
+              <div>
+                <div class="m-title">RipReady — Whatnot Stream Bridge</div>
+                <div class="m-sub">Connects your Whatnot show to RipReady. No OBS required.</div>
+              </div>
+              <div class="m-btn">Add to Chrome</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2 -->
+    <div class="step">
+      <div class="step-num">2</div>
+      <div>
+        <h2 class="step-label">Open RipReady, turn on your camera</h2>
+        <p class="step-desc">Go to <strong>ripready.app/studio</strong> and click Camera. Allow access when Chrome asks.</p>
+        <div class="mock">
+          <div class="mock-bar">
+            <div class="mock-dot"></div><div class="mock-dot"></div><div class="mock-dot"></div>
+            <div class="mock-url">ripready.app/studio</div>
+          </div>
+          <div class="mock-body">
+            <div class="m-row">
+              <div>
+                <div class="m-title">Camera</div>
+                <div class="m-sub">Not started</div>
+              </div>
+              <div class="m-btn">Start Camera</div>
+            </div>
+            <div class="m-card">
+              <div class="m-row">
+                <div class="m-sub">No token — waiting for RipReady extension</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div class="step">
+      <div class="step-num">3</div>
+      <div>
+        <h2 class="step-label">Put RipReady and Whatnot in separate windows</h2>
+        <p class="step-desc">Side by side on one screen is fine. Just make sure they're <strong>two windows</strong>, not two tabs in the same window.</p>
+        <div class="split-mock">
+          <div class="mock">
+            <div class="mock-bar">
+              <div class="mock-dot"></div><div class="mock-dot"></div><div class="mock-dot"></div>
+              <div class="mock-url">ripready.app/studio</div>
+            </div>
+            <div class="mock-body">
+              <div class="m-title" style="font-size:14px;">RipReady Studio</div>
+              <div class="m-sub" style="margin-top:6px;">Camera live, waiting to connect</div>
+            </div>
+          </div>
+          <div class="mock">
+            <div class="mock-bar">
+              <div class="mock-dot"></div><div class="mock-dot"></div><div class="mock-dot"></div>
+              <div class="mock-url">whatnot.com</div>
+            </div>
+            <div class="mock-body">
+              <div class="m-title" style="font-size:14px;">Your Show</div>
+              <div class="m-sub" style="margin-top:6px;">Stream via OBS Tools</div>
+            </div>
+          </div>
+        </div>
+        <div class="warn">
+          <i>!</i>
+          <p><strong>Why this matters:</strong> Chrome pauses tabs sitting in the background, which can freeze your stream mid-broadcast. Two separate windows avoids this completely. You don't need two monitors, just snap or tile both windows on the one you have.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 4 -->
+    <div class="step">
+      <div class="step-num">4</div>
+      <div>
+        <h2 class="step-label">Connect on Whatnot</h2>
+        <p class="step-desc">In your Whatnot show, this is the exact path:</p>
+        <div class="flow">
+          <div class="flow-node">Stream via OBS Tools</div>
+          <span class="flow-sep">→</span>
+          <div class="flow-node teal">Connect</div>
+        </div>
+        <div class="mock" style="margin-top:16px;">
+          <div class="mock-bar">
+            <div class="mock-dot"></div><div class="mock-dot"></div><div class="mock-dot"></div>
+            <div class="mock-url">whatnot.com</div>
+          </div>
+          <div class="mock-body">
+            <div class="m-title" style="font-size:14px;margin-bottom:10px;">OBS Websocket Server</div>
+            <div class="m-card" style="margin-top:0;">
+              <div class="m-sub">Server Password</div>
+              <div class="m-row" style="margin-top:8px;">
+                <div class="m-sub" style="color:var(--text);">••••••••••</div>
+                <div class="m-btn">Connect</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="step-desc" style="margin-top:16px;">You don't need to do anything else here. RipReady picks this up automatically and connects itself in the background.</p>
+      </div>
+    </div>
+
+    <!-- STEP 5 -->
+    <div class="step">
+      <div class="step-num">5</div>
+      <div>
+        <h2 class="step-label">You're live</h2>
+        <p class="step-desc">Switch back to the RipReady window. It goes live on its own, no button to click.</p>
+        <div class="mock">
+          <div class="mock-bar">
+            <div class="mock-dot"></div><div class="mock-dot"></div><div class="mock-dot"></div>
+            <div class="mock-url">ripready.app/studio</div>
+          </div>
+          <div class="mock-body">
+            <div class="m-dot-row">
+              <div class="m-live-dot"></div>
+              <div class="m-title" style="font-size:14px;">LIVE</div>
+              <div class="m-sub" style="margin-left:auto;">00:04:12</div>
+            </div>
+            <div class="m-tabs" style="margin-top:16px;">
+              <div class="m-tab active">Stream</div>
+              <div class="m-tab">Break</div>
+              <div class="m-tab">Overlay</div>
+              <div class="m-tab">Audio</div>
+            </div>
+            <div class="m-sub">Show name, logo, and ticker are already composited into your video. Adjust position anytime from the Overlay tab.</div>
+            <div class="m-corner-grid">
+              <div class="m-corner">↖ Top Left</div>
+              <div class="m-corner">↗ Top Right</div>
+              <div class="m-corner active">↙ Bottom Left</div>
+              <div class="m-corner">↘ Bottom Right</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <div class="footer-title">Something look off?</div>
+    <p>Reply directly to the email this came with, or message Rob. Real feedback from this run is exactly what makes the next one better.</p>
+  </div>
+
+</div>
+</body>
+</html>
