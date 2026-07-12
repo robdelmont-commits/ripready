@@ -956,7 +956,39 @@ body{
         </div>
       </div>
 
-      <div class="ps-label">Output</div>
+      <div class="ps-label" style="margin-top:16px">Camera Position</div>
+      <div class="size-slider-row" style="gap:6px;flex-wrap:wrap">
+        <button class="corner-btn active" id="rot-0" onclick="setCameraRotation(0)">0°</button>
+        <button class="corner-btn" id="rot-90" onclick="setCameraRotation(90)">90°</button>
+        <button class="corner-btn" id="rot-180" onclick="setCameraRotation(180)">180°</button>
+        <button class="corner-btn" id="rot-270" onclick="setCameraRotation(270)">270°</button>
+      </div>
+      <div class="token-hint" style="margin-top:4px">
+        Camera mounted sideways? Try 90° or 270° — whichever corrects it.
+      </div>
+
+      <div class="size-slider-row" style="margin-top:10px">
+        <label>Zoom</label>
+        <input type="range" id="cameraZoomSlider" min="100" max="300" value="100"
+          style="flex:1" oninput="state.camera.zoom = this.value/100; document.getElementById('cameraZoomLabel').textContent = this.value + '%'">
+        <label id="cameraZoomLabel">100%</label>
+      </div>
+
+      <div class="size-slider-row">
+        <label>Horiz.</label>
+        <input type="range" id="cameraPanXSlider" min="0" max="100" value="50"
+          style="flex:1" oninput="state.camera.panX = this.value/100">
+      </div>
+      <div class="size-slider-row">
+        <label>Vert.</label>
+        <input type="range" id="cameraPanYSlider" min="0" max="100" value="50"
+          style="flex:1" oninput="state.camera.panY = this.value/100">
+      </div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="resetCameraPosition()">
+        <i class="ti ti-refresh"></i> Reset Position
+      </button>
+
+      <div class="ps-label" style="margin-top:16px">Output</div>
       <input class="field-input" id="whipServer" type="text"
         value="https://global.whip.live-video.net"
         placeholder="WHIP server URL">
@@ -1048,6 +1080,14 @@ body{
         <input type="range" id="tickerYSlider" min="0" max="100" value="100"
           style="flex:1" oninput="state.tickerYFraction = this.value / 100">
         <label>Bottom</label>
+      </div>
+
+      <div class="ps-label" style="margin-top:16px">Ticker Speed</div>
+      <div class="size-slider-row">
+        <label>Slow</label>
+        <input type="range" id="tickerSpeedSlider" min="5" max="40" value="12"
+          style="flex:1" oninput="state.tickerSpeed = this.value / 10">
+        <label>Fast</label>
       </div>
 
       <div class="ps-label">Show Color</div>
@@ -1224,7 +1264,17 @@ var state = {
   // vertically so it doesn't collide with Break Builder content at the
   // bottom. The ticker itself still scrolls horizontally edge-to-edge.
   tickerYFraction: 1,
+  // Pixels per frame the ticker scrolls, before the scale multiplier.
+  // Was hardcoded to 1.2 — now user-adjustable via the Ticker Speed slider.
+  tickerSpeed: 1.2,
   drag: { active: false, slot: null, offsetX: 0, offsetY: 0 },
+  // Camera crop controls. rotation corrects a physically sideways-mounted
+  // camera (0/90/180/270). zoom (1.0+) shrinks the crop window so the source
+  // is magnified. panX/panY (0-1) move the crop window's center within the
+  // raw camera frame, in RAW sensor space — at rotation 90/270 the slider
+  // that visually moves the picture left/right vs up/down swaps, since the
+  // raw sensor's X/Y axes no longer line up with the rotated output.
+  camera: { rotation: 0, zoom: 1, panX: 0.5, panY: 0.5 },
   // Web Audio mixer — combines mic + optional second input + music bed into
   // one MediaStreamTrack that replaces the raw mic track when publishing.
   // Built this way (rather than relying on OBS-style hardware mixing) so it
@@ -1327,14 +1377,10 @@ function startCamera() {
     var video = document.getElementById('cameraVideo');
     video.srcObject = stream;
     video.onloadedmetadata = function() {
-      // Set canvas to native camera resolution
+      // Canvas is already sized/visible and the render loop already running
+      // from page load (see DOMContentLoaded) — startRenderLoop() below is
+      // a no-op guard in case it somehow isn't running yet.
       var canvas = document.getElementById('cameraCanvas');
-      // 720x1280 portrait — solid Whatnot quality, half the pixels of 1080p
-      canvas.width = 720;
-      canvas.height = 1280;
-      canvas.style.display = 'block';
-      document.getElementById('noCameraMsg').style.display = 'none';
-      // Start the compositing render loop
       startRenderLoop(video, canvas);
       // Capture canvas stream for IVS (replaces raw video track)
       state.canvasStream = canvas.captureStream(30);
@@ -1378,9 +1424,12 @@ async function stopCamera() {
     await endStream();
   }
 
-  // Halt the render loop so it stops drawing video frames that no
-  // longer exist once the tracks are stopped below.
-  renderLoopActive = false;
+  // NOTE: render loop is intentionally left running (not halted here) —
+  // it now starts at page load and stays alive so overlays remain visible
+  // on a black canvas even with no camera attached. Setting video.srcObject
+  // to null below drops video.videoWidth to 0, which the draw loop already
+  // checks each frame, so it naturally stops drawing camera frames without
+  // needing the whole loop killed.
 
   // Release the actual camera/mic hardware — without this, the camera
   // light stays on and other apps (e.g. OBS) can't get exclusive access.
@@ -1396,12 +1445,9 @@ async function stopCamera() {
   state.cameraActive = false;
   state.autoTriggerPending = false;
 
-  // Reset video/canvas back to their pre-camera state
+  // Reset video source only — canvas stays visible (black bg + overlays)
   var video = document.getElementById('cameraVideo');
   video.srcObject = null;
-  var canvas = document.getElementById('cameraCanvas');
-  canvas.style.display = 'none';
-  document.getElementById('noCameraMsg').style.display = 'flex';
 
   // Reset button back to its original label/state
   document.getElementById('camStartBtn').innerHTML = '<i class="ti ti-camera"></i> Start Camera';
@@ -1411,6 +1457,26 @@ async function stopCamera() {
 
 function switchCamera() {
   if(state.cameraActive) startCamera();
+}
+
+// ── CAMERA POSITION (rotation/zoom/pan) ──
+function setCameraRotation(deg) {
+  state.camera.rotation = deg;
+  [0, 90, 180, 270].forEach(function(d){
+    document.getElementById('rot-' + d).classList.toggle('active', d === deg);
+  });
+}
+
+function resetCameraPosition() {
+  state.camera.rotation = 0;
+  state.camera.zoom = 1;
+  state.camera.panX = 0.5;
+  state.camera.panY = 0.5;
+  setCameraRotation(0);
+  document.getElementById('cameraZoomSlider').value = 100;
+  document.getElementById('cameraZoomLabel').textContent = '100%';
+  document.getElementById('cameraPanXSlider').value = 50;
+  document.getElementById('cameraPanYSlider').value = 50;
 }
 
 // ── AUDIO MIXER ──
@@ -1742,8 +1808,10 @@ function startRenderLoop(video, canvas) {
   // badge/show-name/ticker text to roughly half their designed size.
   var scale = h / 1280;
 
-  // Pre-compute crop rect once (camera dims don't change mid-stream)
-  var srcX = 0, srcY = 0, srcW = 0, srcH = 0, cropReady = false;
+  // Crop rect — recomputed every frame (cheap arithmetic) rather than once,
+  // since rotation/zoom/pan are now live-adjustable via the Camera Position
+  // controls instead of fixed for the life of the stream.
+  var srcX = 0, srcY = 0, srcW = 0, srcH = 0;
 
   // Pre-set fonts once
   var fontBadge  = 'bold ' + Math.round(14 * scale) + 'px Barlow Condensed, sans-serif';
@@ -1766,7 +1834,9 @@ function startRenderLoop(video, canvas) {
   // vertical position (tickerY) is adjustable, recomputed in refreshCache().
   var tickerH = 56 * scale, tickerY = h - tickerH;
   var tickerX = null;
-  var speed = 1.2 * scale;
+  // Reactive — updated in refreshCache() from state.tickerSpeed so the
+  // Ticker Speed slider takes effect without restarting the stream.
+  var tickerSpeed = 1.2;
 
   // Cached DOM values — refreshed every 10 frames
   var frameCount = 0;
@@ -1800,6 +1870,9 @@ function startRenderLoop(video, canvas) {
     // the full canvas height, clamped so the band never runs off-canvas.
     tickerY = Math.max(0, Math.min(h - tickerH, state.tickerYFraction * (h - tickerH)));
 
+    // Ticker speed — pixels/frame before the scale multiplier.
+    tickerSpeed = (state.tickerSpeed != null ? Number(state.tickerSpeed) : 1.2);
+
     // Re-measure text only when it changes
     if (newName !== showName) {
       showName = newName;
@@ -1832,18 +1905,55 @@ function startRenderLoop(video, canvas) {
     frameCount++;
     if (frameCount % 10 === 0) refreshCache();
 
-    // 1. Compute crop rect on first valid video frame
-    if (!cropReady && video.videoWidth) {
+    // 1. Compute crop rect — recomputed every frame since rotation/zoom/pan
+    // can change live (previously computed once, back when the crop was
+    // fixed for the life of the stream).
+    if (video.videoWidth) {
       var vw = video.videoWidth, vh = video.videoHeight;
-      var canvasAR = w / h, videoAR = vw / vh;
-      if (videoAR > canvasAR) {
-        srcH = vh; srcW = vh * canvasAR; srcX = (vw - srcW) / 2; srcY = 0;
+      var rot = state.camera.rotation || 0;
+      var zoom = state.camera.zoom || 1;
+      var panX = (state.camera.panX != null ? state.camera.panX : 0.5);
+      var panY = (state.camera.panY != null ? state.camera.panY : 0.5);
+
+      // Target aspect ratio for the crop, IN RAW (unrotated) video space.
+      // At 90/270 the output is rotated a quarter turn relative to the raw
+      // frame, so the crop taken from the raw frame must use the SWAPPED
+      // aspect ratio in order to end up matching canvasAR after rotating.
+      var quarterTurn = (rot === 90 || rot === 270);
+      var cropAR = quarterTurn ? (h / w) : (w / h);
+      var videoAR = vw / vh;
+      var baseW, baseH;
+      if (videoAR > cropAR) {
+        baseH = vh; baseW = vh * cropAR;
       } else {
-        srcW = vw; srcH = vw / canvasAR; srcX = 0; srcY = (vh - srcH) / 2;
+        baseW = vw; baseH = vw / cropAR;
       }
-      cropReady = true;
+
+      // Zoom shrinks the crop window (magnifies the image); pan moves its
+      // center within the raw frame, clamped so it never runs off-sensor.
+      srcW = baseW / zoom;
+      srcH = baseH / zoom;
+      var cx = panX * vw, cy = panY * vh;
+      srcX = Math.max(0, Math.min(vw - srcW, cx - srcW / 2));
+      srcY = Math.max(0, Math.min(vh - srcH, cy - srcH / 2));
+
+      if (rot === 0) {
+        ctx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, w, h);
+      } else {
+        // Rotate about canvas center. Destination rect is drawn pre-rotation
+        // with w/h swapped for a quarter turn so it lands correctly once
+        // the rotate() is applied.
+        ctx.save();
+        ctx.translate(w / 2, h / 2);
+        ctx.rotate(rot * Math.PI / 180);
+        if (quarterTurn) {
+          ctx.drawImage(video, srcX, srcY, srcW, srcH, -h / 2, -w / 2, h, w);
+        } else {
+          ctx.drawImage(video, srcX, srcY, srcW, srcH, -w / 2, -h / 2, w, h);
+        }
+        ctx.restore();
+      }
     }
-    if (cropReady) ctx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, w, h);
 
     // 2. LIVE Badge
     if (showLiveBadge) {
@@ -1896,7 +2006,7 @@ function startRenderLoop(video, canvas) {
       ctx.font = fontTicker;
       ctx.textBaseline = 'middle';
       if (tickerX === null) tickerX = w;
-      tickerX -= speed;
+      tickerX -= tickerSpeed * scale;
       if (tickerX < -textW) tickerX = 0;
       ctx.fillText(fullText, tickerX + 20 * scale, tickerY + tickerH / 2);
     }
@@ -2485,6 +2595,20 @@ document.addEventListener('DOMContentLoaded', function(){
   setStatus('holding');
   startTokenPolling();
   onboardInit();
+
+  // Start the compositing render loop immediately, before the camera is
+  // ever turned on — previously this only started inside startCamera()'s
+  // onloadedmetadata callback, so overlays/logo/images couldn't be
+  // positioned until the camera was running. video.videoWidth is 0 with
+  // no srcObject, so the crop/camera-draw step above naturally no-ops and
+  // the canvas just shows black behind the overlays until camera start.
+  var earlyVideo = document.getElementById('cameraVideo');
+  var earlyCanvas = document.getElementById('cameraCanvas');
+  earlyCanvas.width = 720;
+  earlyCanvas.height = 1280;
+  earlyCanvas.style.display = 'block';
+  document.getElementById('noCameraMsg').style.display = 'none';
+  startRenderLoop(earlyVideo, earlyCanvas);
 });
 
 // ── ONBOARDING ──
