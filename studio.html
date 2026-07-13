@@ -969,12 +969,12 @@ body{
 
       <div class="size-slider-row" style="margin-top:10px">
         <label>Size</label>
-        <input type="range" id="cameraSizeSlider" min="10" max="100" value="100"
+        <input type="range" id="cameraSizeSlider" min="10" max="300" value="100"
           style="flex:1" oninput="state.camera.size = this.value/100; document.getElementById('cameraSizeLabel').textContent = this.value + '%'">
         <label id="cameraSizeLabel">100%</label>
       </div>
       <div class="token-hint" style="margin-top:-4px">
-        Full sensor image, no crop, no stretch — same as OBS. Drag the camera directly on the preview to reposition it.
+        100% shows the full frame (may letterbox top/bottom). Push past 100% to crop in and fill the screen — same as scaling a source past the canvas edge in OBS. Drag the camera to reposition once it's larger than the frame.
       </div>
       <button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="resetCameraPosition()">
         <i class="ti ti-refresh"></i> Reset Position
@@ -2030,8 +2030,14 @@ function drawPositionedVideo(ctx, video, camState, w, h) {
   var iw = effW * ratio, ih = effH * ratio;
   var ix = (camState.x != null ? camState.x : 0) * w;
   var iy = (camState.y != null ? camState.y : 0) * h;
-  ix = Math.max(0, Math.min(w - iw, ix));
-  iy = Math.max(0, Math.min(h - ih, iy));
+  // Clamp range flips once the box is bigger than the canvas (size>100%):
+  // instead of [0, w-iw] (box smaller, can't leave a gap) it becomes
+  // [w-iw, 0] (box bigger, can slide left/right — or up/down — but must
+  // still cover the full canvas on that axis, no gap at either edge).
+  var minX = Math.min(0, w - iw), maxX = Math.max(0, w - iw);
+  var minY = Math.min(0, h - ih), maxY = Math.max(0, h - ih);
+  ix = Math.max(minX, Math.min(maxX, ix));
+  iy = Math.max(minY, Math.min(maxY, iy));
   // Store computed pixel bounds for hit detection (drag-to-reposition)
   camState._px = ix; camState._py = iy; camState._pw = iw; camState._ph = ih;
 
@@ -2118,11 +2124,15 @@ function initCanvasDrag(canvas) {
     // Convert to fractional position
     var newX = (pos.x - state.drag.offsetX) / canvas.width;
     var newY = (pos.y - state.drag.offsetY) / canvas.height;
-    // Clamp so image stays fully within canvas
+    // Clamp so the box always covers the canvas with no gap at either
+    // edge — range flips once it's bigger than the canvas (camera size
+    // above 100%), same logic as drawPositionedVideo's clamp.
     var iw = (imgState._pw || 0) / canvas.width;
     var ih = (imgState._ph || 0) / canvas.height;
-    imgState.x = Math.max(0, Math.min(1 - iw, newX));
-    imgState.y = Math.max(0, Math.min(1 - ih, newY));
+    var minX = Math.min(0, 1 - iw), maxX = Math.max(0, 1 - iw);
+    var minY = Math.min(0, 1 - ih), maxY = Math.max(0, 1 - ih);
+    imgState.x = Math.max(minX, Math.min(maxX, newX));
+    imgState.y = Math.max(minY, Math.min(maxY, newY));
   }
 
   function onEnd(e) {
