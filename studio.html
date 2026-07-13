@@ -968,24 +968,13 @@ body{
       </div>
 
       <div class="size-slider-row" style="margin-top:10px">
-        <label>Zoom</label>
-        <input type="range" id="cameraZoomSlider" min="30" max="300" value="100"
-          style="flex:1" oninput="state.camera.zoom = this.value/100; document.getElementById('cameraZoomLabel').textContent = this.value + '%'">
-        <label id="cameraZoomLabel">100%</label>
+        <label>Size</label>
+        <input type="range" id="cameraSizeSlider" min="10" max="100" value="100"
+          style="flex:1" oninput="state.camera.size = this.value/100; document.getElementById('cameraSizeLabel').textContent = this.value + '%'">
+        <label id="cameraSizeLabel">100%</label>
       </div>
       <div class="token-hint" style="margin-top:-4px">
-        Below 100% widens the view instead of cropping so tightly — still fills the frame, no black bars, but the picture stretches slightly the further out you go.
-      </div>
-
-      <div class="size-slider-row">
-        <label>Horiz.</label>
-        <input type="range" id="cameraPanXSlider" min="0" max="100" value="50"
-          style="flex:1" oninput="state.camera.panX = this.value/100">
-      </div>
-      <div class="size-slider-row">
-        <label>Vert.</label>
-        <input type="range" id="cameraPanYSlider" min="0" max="100" value="50"
-          style="flex:1" oninput="state.camera.panY = this.value/100">
+        Full sensor image, no crop, no stretch — same as OBS. Drag the camera directly on the preview to reposition it.
       </div>
       <button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="resetCameraPosition()">
         <i class="ti ti-refresh"></i> Reset Position
@@ -1271,13 +1260,12 @@ var state = {
   // Was hardcoded to 1.2 — now user-adjustable via the Ticker Speed slider.
   tickerSpeed: 1.2,
   drag: { active: false, slot: null, offsetX: 0, offsetY: 0 },
-  // Camera crop controls. rotation corrects a physically sideways-mounted
-  // camera (0/90/180/270). zoom (1.0+) shrinks the crop window so the source
-  // is magnified. panX/panY (0-1) move the crop window's center within the
-  // raw camera frame, in RAW sensor space — at rotation 90/270 the slider
-  // that visually moves the picture left/right vs up/down swaps, since the
-  // raw sensor's X/Y axes no longer line up with the rotated output.
-  camera: { rotation: 0, zoom: 1, panX: 0.5, panY: 0.5 },
+  // Camera position/size — drag-to-move and slider-to-size, same model as
+  // the image overlays. x/y are the fractional top-left corner; size is a
+  // fraction 0.1-1.0 of canvas width/height (see drawPositionedVideo).
+  // rotation corrects a physically sideways-mounted camera (0/90/180/270).
+  // Default centers a typical 16:9 webcam at full width in the canvas.
+  camera: { rotation: 0, x: 0, y: 0.34, size: 1 },
   // Web Audio mixer — combines mic + optional second input + music bed into
   // one MediaStreamTrack that replaces the raw mic track when publishing.
   // Built this way (rather than relying on OBS-style hardware mixing) so it
@@ -1472,14 +1460,12 @@ function setCameraRotation(deg) {
 
 function resetCameraPosition() {
   state.camera.rotation = 0;
-  state.camera.zoom = 1;
-  state.camera.panX = 0.5;
-  state.camera.panY = 0.5;
+  state.camera.x = 0;
+  state.camera.y = 0.34;
+  state.camera.size = 1;
   setCameraRotation(0);
-  document.getElementById('cameraZoomSlider').value = 100;
-  document.getElementById('cameraZoomLabel').textContent = '100%';
-  document.getElementById('cameraPanXSlider').value = 50;
-  document.getElementById('cameraPanYSlider').value = 50;
+  document.getElementById('cameraSizeSlider').value = 100;
+  document.getElementById('cameraSizeLabel').textContent = '100%';
 }
 
 // ── AUDIO MIXER ──
@@ -1811,11 +1797,6 @@ function startRenderLoop(video, canvas) {
   // badge/show-name/ticker text to roughly half their designed size.
   var scale = h / 1280;
 
-  // Crop rect — recomputed every frame (cheap arithmetic) rather than once,
-  // since rotation/zoom/pan are now live-adjustable via the Camera Position
-  // controls instead of fixed for the life of the stream.
-  var srcX = 0, srcY = 0, srcW = 0, srcH = 0;
-
   // Pre-set fonts once
   var fontBadge  = 'bold ' + Math.round(14 * scale) + 'px Barlow Condensed, sans-serif';
   var fontName   = 'bold ' + Math.round(28 * scale) + 'px Barlow Condensed, sans-serif';
@@ -1908,80 +1889,18 @@ function startRenderLoop(video, canvas) {
     frameCount++;
     if (frameCount % 10 === 0) refreshCache();
 
-    // 1. Compute crop rect — recomputed every frame since rotation/zoom/pan
-    // can change live (previously computed once, back when the crop was
-    // fixed for the life of the stream).
-    //
-    // Clear to black first — safety net for the moment video.videoWidth is
-    // 0 (camera not started/just stopped) so a stale frame doesn't freeze.
+    // 1. Draw camera — positioned/sized like an image overlay (drag to move,
+    // slider to size), full sensor frame always shown, no crop, no stretch.
+    // This matches how OBS actually handles it: the source is placed at
+    // whatever size/position you want, native FOV intact, black fills the
+    // rest of the canvas. Previously this tried to force the camera to
+    // fill the entire 9:16 canvas edge-to-edge, which either cropped out
+    // most of the sensor's horizontal FOV or stretched the image to
+    // compensate — neither of which OBS ever required.
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, w, h);
-
     if (video.videoWidth) {
-      var vw = video.videoWidth, vh = video.videoHeight;
-      var rot = state.camera.rotation || 0;
-      var zoom = state.camera.zoom || 1;
-      var panX = (state.camera.panX != null ? state.camera.panX : 0.5);
-      var panY = (state.camera.panY != null ? state.camera.panY : 0.5);
-      var quarterTurn = (rot === 90 || rot === 270);
-
-      // baseW/baseH = the tightest crop that exactly matches canvas AR with
-      // zero distortion (this is what "100%" always was). Target aspect
-      // ratio is taken IN RAW (unrotated) video space; at 90/270 it's
-      // swapped since the output is a quarter turn from the raw frame.
-      var cropAR = quarterTurn ? (h / w) : (w / h);
-      var videoAR = vw / vh;
-      var baseW, baseH;
-      if (videoAR > cropAR) {
-        baseH = vh; baseW = vh * cropAR;
-      } else {
-        baseW = vw; baseH = vw / cropAR;
-      }
-
-      if (zoom >= 1) {
-        // ZOOM IN (100%+): shrink the crop window below baseW/baseH —
-        // magnifies the image, still fills the canvas edge to edge.
-        srcW = baseW / zoom;
-        srcH = baseH / zoom;
-      } else {
-        // ZOOM OUT (below 100%): the sensor can't capture more than its
-        // native frame, and letterbox bars looked wrong on a live commerce
-        // stream, so instead of shrinking the image into black bars, widen
-        // the crop window past the AR-matched baseW/baseH toward the full
-        // sensor frame (up to 100% of it at the minimum zoom value). This
-        // reveals more of the actual scene at the cost of a mild horizontal
-        // stretch as it widens — same trade-off as a digital wide/zoom-out
-        // on a phone camera — but it always fills the frame, no bars.
-        var minZoom = 0.3;
-        var t = Math.max(0, Math.min(1, (1 - zoom) / (1 - minZoom)));
-        srcW = baseW + t * (vw - baseW);
-        srcH = baseH + t * (vh - baseH);
-      }
-      srcW = Math.min(srcW, vw);
-      srcH = Math.min(srcH, vh);
-
-      // Pan moves the crop window's center within the raw frame, clamped
-      // so it never runs off-sensor.
-      var cx = panX * vw, cy = panY * vh;
-      srcX = Math.max(0, Math.min(vw - srcW, cx - srcW / 2));
-      srcY = Math.max(0, Math.min(vh - srcH, cy - srcH / 2));
-
-      if (rot === 0) {
-        ctx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, w, h);
-      } else {
-        // Rotate about canvas center. Destination rect is drawn pre-rotation
-        // with w/h swapped for a quarter turn so it lands correctly once
-        // the rotate() is applied.
-        ctx.save();
-        ctx.translate(w / 2, h / 2);
-        ctx.rotate(rot * Math.PI / 180);
-        if (quarterTurn) {
-          ctx.drawImage(video, srcX, srcY, srcW, srcH, -h / 2, -w / 2, h, w);
-        } else {
-          ctx.drawImage(video, srcX, srcY, srcW, srcH, -w / 2, -h / 2, w, h);
-        }
-        ctx.restore();
-      }
+      drawPositionedVideo(ctx, video, state.camera, w, h);
     }
 
     // 2. LIVE Badge
@@ -2094,6 +2013,46 @@ function drawPositionedImage(ctx, img, imgState, w, h) {
   ctx.drawImage(img, ix, iy, iw, ih);
 }
 
+// Draw the camera at a stored fractional position/size — same pattern as
+// drawPositionedImage above (drag to move, slider to size), except the
+// full raw sensor frame is always used (no crop, no stretch) and rotation
+// is supported for a physically sideways-mounted camera.
+function drawPositionedVideo(ctx, video, camState, w, h) {
+  var vw = video.videoWidth, vh = video.videoHeight;
+  var rot = camState.rotation || 0;
+  var quarterTurn = (rot === 90 || rot === 270);
+  // Effective dimensions after rotation (a quarter turn swaps W/H)
+  var effW = quarterTurn ? vh : vw;
+  var effH = quarterTurn ? vw : vh;
+  var size = camState.size || 1;
+  var maxW = w * size, maxH = h * size;
+  var ratio = Math.min(maxW / effW, maxH / effH);
+  var iw = effW * ratio, ih = effH * ratio;
+  var ix = (camState.x != null ? camState.x : 0) * w;
+  var iy = (camState.y != null ? camState.y : 0) * h;
+  ix = Math.max(0, Math.min(w - iw, ix));
+  iy = Math.max(0, Math.min(h - ih, iy));
+  // Store computed pixel bounds for hit detection (drag-to-reposition)
+  camState._px = ix; camState._py = iy; camState._pw = iw; camState._ph = ih;
+
+  if (rot === 0) {
+    ctx.drawImage(video, 0, 0, vw, vh, ix, iy, iw, ih);
+    return;
+  }
+  // Rotate about the box's own center. Destination rect is drawn
+  // pre-rotation with iw/ih swapped for a quarter turn so it lands
+  // correctly at the intended footprint once rotate() is applied.
+  ctx.save();
+  ctx.translate(ix + iw / 2, iy + ih / 2);
+  ctx.rotate(rot * Math.PI / 180);
+  if (quarterTurn) {
+    ctx.drawImage(video, 0, 0, vw, vh, -ih / 2, -iw / 2, ih, iw);
+  } else {
+    ctx.drawImage(video, 0, 0, vw, vh, -iw / 2, -ih / 2, iw, ih);
+  }
+  ctx.restore();
+}
+
 // ── DRAG TO REPOSITION IMAGE OVERLAYS ──
 function initCanvasDrag(canvas) {
   function getCanvasPos(e) {
@@ -2108,17 +2067,29 @@ function initCanvasDrag(canvas) {
     };
   }
 
+  // Resolves a drag slot name to its state object — 'camera' lives at
+  // state.camera, image slots live at state.images[slot].
+  function getDragState(slot) {
+    return slot === 'camera' ? state.camera : state.images[slot];
+  }
+
   function hitTest(pos) {
-    // Check img2 first (drawn on top)
-    var slots = ['img2', 'img1'];
+    // Check img2/img1 first (drawn on top of camera), camera last.
+    var slots = ['img2', 'img1', 'camera'];
     for (var i = 0; i < slots.length; i++) {
       var slot = slots[i];
-      var tog = document.getElementById('tog-' + slot);
-      var imgState = state.images[slot];
-      if (!tog || !tog.classList.contains('on')) continue;
-      if (!imgState.el || imgState._px === undefined) continue;
-      if (pos.x >= imgState._px && pos.x <= imgState._px + imgState._pw &&
-          pos.y >= imgState._py && pos.y <= imgState._py + imgState._ph) {
+      if (slot === 'camera') {
+        if (!state.cameraActive) continue;
+      } else {
+        var tog = document.getElementById('tog-' + slot);
+        var imgState = state.images[slot];
+        if (!tog || !tog.classList.contains('on')) continue;
+        if (!imgState.el) continue;
+      }
+      var target = getDragState(slot);
+      if (target._px === undefined) continue;
+      if (pos.x >= target._px && pos.x <= target._px + target._pw &&
+          pos.y >= target._py && pos.y <= target._py + target._ph) {
         return slot;
       }
     }
@@ -2130,7 +2101,7 @@ function initCanvasDrag(canvas) {
     var hit = hitTest(pos);
     if (!hit) return;
     e.preventDefault();
-    var imgState = state.images[hit];
+    var imgState = getDragState(hit);
     state.drag.active = true;
     state.drag.slot = hit;
     // Offset from image top-left in canvas pixels
@@ -2143,7 +2114,7 @@ function initCanvasDrag(canvas) {
     if (!state.drag.active) return;
     e.preventDefault();
     var pos = getCanvasPos(e);
-    var imgState = state.images[state.drag.slot];
+    var imgState = getDragState(state.drag.slot);
     // Convert to fractional position
     var newX = (pos.x - state.drag.offsetX) / canvas.width;
     var newY = (pos.y - state.drag.offsetY) / canvas.height;
