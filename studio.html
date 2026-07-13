@@ -968,13 +968,19 @@ body{
       </div>
 
       <div class="size-slider-row" style="margin-top:10px">
-        <label>Size</label>
-        <input type="range" id="cameraSizeSlider" min="10" max="300" value="100"
-          style="flex:1" oninput="state.camera.size = this.value/100; document.getElementById('cameraSizeLabel').textContent = this.value + '%'">
-        <label id="cameraSizeLabel">100%</label>
+        <label>Width</label>
+        <input type="range" id="cameraWSlider" min="10" max="200" value="100"
+          style="flex:1" oninput="state.camera.w = this.value/100; document.getElementById('cameraWLabel').textContent = this.value + '%'">
+        <label id="cameraWLabel">100%</label>
+      </div>
+      <div class="size-slider-row">
+        <label>Height</label>
+        <input type="range" id="cameraHSlider" min="10" max="200" value="100"
+          style="flex:1" oninput="state.camera.h = this.value/100; document.getElementById('cameraHLabel').textContent = this.value + '%'">
+        <label id="cameraHLabel">100%</label>
       </div>
       <div class="token-hint" style="margin-top:-4px">
-        100% shows the full frame (may letterbox top/bottom). Push past 100% to crop in and fill the screen — same as scaling a source past the canvas edge in OBS. Drag the camera to reposition once it's larger than the frame.
+        Width and height stretch independently — same as dragging a corner in OBS without locking aspect ratio. Nothing gets cropped off; it just stretches to fill whatever box you set. Drag the camera on the preview to reposition it.
       </div>
       <button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="resetCameraPosition()">
         <i class="ti ti-refresh"></i> Reset Position
@@ -1260,12 +1266,12 @@ var state = {
   // Was hardcoded to 1.2 — now user-adjustable via the Ticker Speed slider.
   tickerSpeed: 1.2,
   drag: { active: false, slot: null, offsetX: 0, offsetY: 0 },
-  // Camera position/size — drag-to-move and slider-to-size, same model as
-  // the image overlays. x/y are the fractional top-left corner; size is a
-  // fraction 0.1-1.0 of canvas width/height (see drawPositionedVideo).
-  // rotation corrects a physically sideways-mounted camera (0/90/180/270).
-  // Default centers a typical 16:9 webcam at full width in the canvas.
-  camera: { rotation: 0, x: 0, y: 0.34, size: 1 },
+  // Camera position/size — drag-to-move, independent Width/Height sliders
+  // (no aspect lock, matching OBS's default drag-resize behavior — stretch
+  // to fill the box rather than crop). x/y are the fractional top-left
+  // corner; w/h are fractions of canvas width/height. rotation corrects a
+  // physically sideways-mounted camera (0/90/180/270).
+  camera: { rotation: 0, x: 0, y: 0, w: 1, h: 1 },
   // Web Audio mixer — combines mic + optional second input + music bed into
   // one MediaStreamTrack that replaces the raw mic track when publishing.
   // Built this way (rather than relying on OBS-style hardware mixing) so it
@@ -1461,11 +1467,14 @@ function setCameraRotation(deg) {
 function resetCameraPosition() {
   state.camera.rotation = 0;
   state.camera.x = 0;
-  state.camera.y = 0.34;
-  state.camera.size = 1;
+  state.camera.y = 0;
+  state.camera.w = 1;
+  state.camera.h = 1;
   setCameraRotation(0);
-  document.getElementById('cameraSizeSlider').value = 100;
-  document.getElementById('cameraSizeLabel').textContent = '100%';
+  document.getElementById('cameraWSlider').value = 100;
+  document.getElementById('cameraWLabel').textContent = '100%';
+  document.getElementById('cameraHSlider').value = 100;
+  document.getElementById('cameraHLabel').textContent = '100%';
 }
 
 // ── AUDIO MIXER ──
@@ -2013,48 +2022,47 @@ function drawPositionedImage(ctx, img, imgState, w, h) {
   ctx.drawImage(img, ix, iy, iw, ih);
 }
 
-// Draw the camera at a stored fractional position/size — same pattern as
-// drawPositionedImage above (drag to move, slider to size), except the
-// full raw sensor frame is always used (no crop, no stretch) and rotation
-// is supported for a physically sideways-mounted camera.
+// Draw the camera at a stored fractional position/size — drag to move,
+// sliders to size, same interaction pattern as the image overlays. Unlike
+// drawPositionedImage, width and height are independent (no aspect lock),
+// so the video STRETCHES to fill the box exactly rather than being
+// cropped to preserve aspect ratio. This matches OBS's actual default
+// behavior when you resize a source by dragging a corner/edge without
+// holding the aspect-lock modifier — which is what most people do, and
+// why an OBS camera box "just looks right" without ever needing to crop
+// content off the sides.
 function drawPositionedVideo(ctx, video, camState, w, h) {
   var vw = video.videoWidth, vh = video.videoHeight;
   var rot = camState.rotation || 0;
   var quarterTurn = (rot === 90 || rot === 270);
-  // Effective dimensions after rotation (a quarter turn swaps W/H)
-  var effW = quarterTurn ? vh : vw;
-  var effH = quarterTurn ? vw : vh;
-  var size = camState.size || 1;
-  var maxW = w * size, maxH = h * size;
-  var ratio = Math.min(maxW / effW, maxH / effH);
-  var iw = effW * ratio, ih = effH * ratio;
+  var boxW = (camState.w != null ? camState.w : 1) * w;
+  var boxH = (camState.h != null ? camState.h : 1) * h;
   var ix = (camState.x != null ? camState.x : 0) * w;
   var iy = (camState.y != null ? camState.y : 0) * h;
-  // Clamp range flips once the box is bigger than the canvas (size>100%):
-  // instead of [0, w-iw] (box smaller, can't leave a gap) it becomes
-  // [w-iw, 0] (box bigger, can slide left/right — or up/down — but must
-  // still cover the full canvas on that axis, no gap at either edge).
-  var minX = Math.min(0, w - iw), maxX = Math.max(0, w - iw);
-  var minY = Math.min(0, h - ih), maxY = Math.max(0, h - ih);
+  // Clamp range flips once the box is bigger than the canvas on that axis:
+  // instead of [0, w-boxW] (box smaller, can't leave a gap) it becomes
+  // [w-boxW, 0] (box bigger, can slide but must still cover fully).
+  var minX = Math.min(0, w - boxW), maxX = Math.max(0, w - boxW);
+  var minY = Math.min(0, h - boxH), maxY = Math.max(0, h - boxH);
   ix = Math.max(minX, Math.min(maxX, ix));
   iy = Math.max(minY, Math.min(maxY, iy));
   // Store computed pixel bounds for hit detection (drag-to-reposition)
-  camState._px = ix; camState._py = iy; camState._pw = iw; camState._ph = ih;
+  camState._px = ix; camState._py = iy; camState._pw = boxW; camState._ph = boxH;
 
   if (rot === 0) {
-    ctx.drawImage(video, 0, 0, vw, vh, ix, iy, iw, ih);
+    ctx.drawImage(video, 0, 0, vw, vh, ix, iy, boxW, boxH);
     return;
   }
   // Rotate about the box's own center. Destination rect is drawn
-  // pre-rotation with iw/ih swapped for a quarter turn so it lands
+  // pre-rotation with boxW/boxH swapped for a quarter turn so it lands
   // correctly at the intended footprint once rotate() is applied.
   ctx.save();
-  ctx.translate(ix + iw / 2, iy + ih / 2);
+  ctx.translate(ix + boxW / 2, iy + boxH / 2);
   ctx.rotate(rot * Math.PI / 180);
   if (quarterTurn) {
-    ctx.drawImage(video, 0, 0, vw, vh, -ih / 2, -iw / 2, ih, iw);
+    ctx.drawImage(video, 0, 0, vw, vh, -boxH / 2, -boxW / 2, boxH, boxW);
   } else {
-    ctx.drawImage(video, 0, 0, vw, vh, -iw / 2, -ih / 2, iw, ih);
+    ctx.drawImage(video, 0, 0, vw, vh, -boxW / 2, -boxH / 2, boxW, boxH);
   }
   ctx.restore();
 }
