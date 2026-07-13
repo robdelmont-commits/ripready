@@ -974,7 +974,7 @@ body{
         <label id="cameraZoomLabel">100%</label>
       </div>
       <div class="token-hint" style="margin-top:-4px">
-        Below 100% shows the full camera frame with letterbox bars instead of cropping — use it if 100% still feels too zoomed in.
+        Below 100% widens the view instead of cropping so tightly — still fills the frame, no black bars, but the picture stretches slightly the further out you go.
       </div>
 
       <div class="size-slider-row">
@@ -1912,10 +1912,8 @@ function startRenderLoop(video, canvas) {
     // can change live (previously computed once, back when the crop was
     // fixed for the life of the stream).
     //
-    // Clear to black first. Needed now that zoom can go below 100% (see
-    // below) and leave letterbox bars — without this, old camera pixels
-    // from a previous frame's different pan/zoom would ghost/smear behind
-    // the new frame instead of showing clean black.
+    // Clear to black first — safety net for the moment video.videoWidth is
+    // 0 (camera not started/just stopped) so a stale frame doesn't freeze.
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, w, h);
 
@@ -1927,70 +1925,61 @@ function startRenderLoop(video, canvas) {
       var panY = (state.camera.panY != null ? state.camera.panY : 0.5);
       var quarterTurn = (rot === 90 || rot === 270);
 
+      // baseW/baseH = the tightest crop that exactly matches canvas AR with
+      // zero distortion (this is what "100%" always was). Target aspect
+      // ratio is taken IN RAW (unrotated) video space; at 90/270 it's
+      // swapped since the output is a quarter turn from the raw frame.
+      var cropAR = quarterTurn ? (h / w) : (w / h);
+      var videoAR = vw / vh;
+      var baseW, baseH;
+      if (videoAR > cropAR) {
+        baseH = vh; baseW = vh * cropAR;
+      } else {
+        baseW = vw; baseH = vw / cropAR;
+      }
+
       if (zoom >= 1) {
-        // ZOOM IN / DEFAULT (100%+): cover-crop — fills the entire canvas,
-        // no letterbox bars, cropping the long edge of the source. Target
-        // aspect ratio for the crop is taken IN RAW (unrotated) video space;
-        // at 90/270 it's swapped since the output is a quarter turn from
-        // the raw frame.
-        var cropAR = quarterTurn ? (h / w) : (w / h);
-        var videoAR = vw / vh;
-        var baseW, baseH;
-        if (videoAR > cropAR) {
-          baseH = vh; baseW = vh * cropAR;
-        } else {
-          baseW = vw; baseH = vw / cropAR;
-        }
-        // Zoom shrinks the crop window (magnifies the image); pan moves its
-        // center within the raw frame, clamped so it never runs off-sensor.
+        // ZOOM IN (100%+): shrink the crop window below baseW/baseH —
+        // magnifies the image, still fills the canvas edge to edge.
         srcW = baseW / zoom;
         srcH = baseH / zoom;
-        var cx = panX * vw, cy = panY * vh;
-        srcX = Math.max(0, Math.min(vw - srcW, cx - srcW / 2));
-        srcY = Math.max(0, Math.min(vh - srcH, cy - srcH / 2));
-
-        if (rot === 0) {
-          ctx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, w, h);
-        } else {
-          ctx.save();
-          ctx.translate(w / 2, h / 2);
-          ctx.rotate(rot * Math.PI / 180);
-          if (quarterTurn) {
-            ctx.drawImage(video, srcX, srcY, srcW, srcH, -h / 2, -w / 2, h, w);
-          } else {
-            ctx.drawImage(video, srcX, srcY, srcW, srcH, -w / 2, -h / 2, w, h);
-          }
-          ctx.restore();
-        }
       } else {
         // ZOOM OUT (below 100%): the sensor can't capture more than its
-        // native frame, so "zooming out" past the full-bleed crop above
-        // means showing the ENTIRE raw frame — uncropped — and shrinking it
-        // to fit inside the canvas with letterbox/pillarbox bars, rather
-        // than trying (and failing) to crop past the edge of the source.
-        // containScale = the largest scale at which the full rotated frame
-        // fits inside the canvas with no cropping at all; zoom (0.3-1.0)
-        // shrinks further from there for a true "step back" effect.
-        var containScale = quarterTurn
-          ? Math.min(w / vh, h / vw)
-          : Math.min(w / vw, h / vh);
-        var drawScale = containScale * Math.max(0.3, zoom);
-        var destW = vw * drawScale, destH = vh * drawScale;
-        // Footprint on canvas after rotation (quarter turn swaps W/H)
-        var footprintW = quarterTurn ? destH : destW;
-        var footprintH = quarterTurn ? destW : destH;
-        // Pan slides the shrunk frame within its available slack space
-        // instead of moving a crop window, since nothing is being cropped.
-        var availX = Math.max(0, w - footprintW);
-        var availY = Math.max(0, h - footprintH);
-        var offsetX = (panX - 0.5) * availX;
-        var offsetY = (panY - 0.5) * availY;
+        // native frame, and letterbox bars looked wrong on a live commerce
+        // stream, so instead of shrinking the image into black bars, widen
+        // the crop window past the AR-matched baseW/baseH toward the full
+        // sensor frame (up to 100% of it at the minimum zoom value). This
+        // reveals more of the actual scene at the cost of a mild horizontal
+        // stretch as it widens — same trade-off as a digital wide/zoom-out
+        // on a phone camera — but it always fills the frame, no bars.
+        var minZoom = 0.3;
+        var t = Math.max(0, Math.min(1, (1 - zoom) / (1 - minZoom)));
+        srcW = baseW + t * (vw - baseW);
+        srcH = baseH + t * (vh - baseH);
+      }
+      srcW = Math.min(srcW, vw);
+      srcH = Math.min(srcH, vh);
 
-        srcX = 0; srcY = 0; srcW = vw; srcH = vh;
+      // Pan moves the crop window's center within the raw frame, clamped
+      // so it never runs off-sensor.
+      var cx = panX * vw, cy = panY * vh;
+      srcX = Math.max(0, Math.min(vw - srcW, cx - srcW / 2));
+      srcY = Math.max(0, Math.min(vh - srcH, cy - srcH / 2));
+
+      if (rot === 0) {
+        ctx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, w, h);
+      } else {
+        // Rotate about canvas center. Destination rect is drawn pre-rotation
+        // with w/h swapped for a quarter turn so it lands correctly once
+        // the rotate() is applied.
         ctx.save();
-        ctx.translate(w / 2 + offsetX, h / 2 + offsetY);
+        ctx.translate(w / 2, h / 2);
         ctx.rotate(rot * Math.PI / 180);
-        ctx.drawImage(video, 0, 0, vw, vh, -destW / 2, -destH / 2, destW, destH);
+        if (quarterTurn) {
+          ctx.drawImage(video, srcX, srcY, srcW, srcH, -h / 2, -w / 2, h, w);
+        } else {
+          ctx.drawImage(video, srcX, srcY, srcW, srcH, -w / 2, -h / 2, w, h);
+        }
         ctx.restore();
       }
     }
