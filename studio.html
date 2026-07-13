@@ -1358,10 +1358,21 @@ function startCamera() {
   // (confirmed on HD Pro Webcam C920) can land on a very low value (~2fps)
   // even though the device supports up to 30fps — causing choppy preview
   // and broadcast despite the canvas render loop running at a healthy 60fps.
+  //
+  // width/height ideal is 1920x1080 (landscape HD) — NOT a portrait ideal.
+  // This used to request {width:1080, height:1920} (portrait) even though
+  // no webcam has a native portrait sensor mode; asking for that on a
+  // landscape-only camera like the C920 caused the browser to negotiate a
+  // bizarre square 1080x1080 compromise instead of the camera's real
+  // widescreen resolution — degraded quality, and the actual root cause
+  // behind every crop/zoom/stretch problem earlier in this file's history.
+  // The canvas compositor (drawPositionedVideo) already handles arbitrary
+  // source aspect ratios via position/size, so there's no longer any
+  // reason to ask the camera for a portrait shape it can't deliver.
   var constraints = {
     video: deviceId
-      ? {deviceId:{exact:deviceId}, width:{ideal:1080}, height:{ideal:1920}, frameRate:{ideal:30,min:24}}
-      : {width:{ideal:1080}, height:{ideal:1920}, frameRate:{ideal:30,min:24}},
+      ? {deviceId:{exact:deviceId}, width:{ideal:1920}, height:{ideal:1080}, frameRate:{ideal:30,min:24}}
+      : {width:{ideal:1920}, height:{ideal:1080}, frameRate:{ideal:30,min:24}},
     audio: true
   };
   navigator.mediaDevices.getUserMedia(constraints).then(function(stream){
