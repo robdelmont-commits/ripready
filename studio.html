@@ -957,7 +957,10 @@ body{
       </div>
 
       <div class="ps-label" style="margin-top:16px">Camera Position</div>
-      <div class="size-slider-row" style="gap:6px;flex-wrap:wrap">
+      <div class="token-hint" id="cameraDebugReadout" style="font-family:monospace">
+        Raw feed: waiting for camera...
+      </div>
+      <div class="size-slider-row" style="gap:6px;flex-wrap:wrap;margin-top:6px">
         <button class="corner-btn active" id="rot-0" onclick="setCameraRotation(0)">0°</button>
         <button class="corner-btn" id="rot-90" onclick="setCameraRotation(90)">90°</button>
         <button class="corner-btn" id="rot-180" onclick="setCameraRotation(180)">180°</button>
@@ -1839,6 +1842,22 @@ function startRenderLoop(video, canvas) {
   var nameIsTop = false;
 
   function refreshCache() {
+    // Raw camera diagnostic — ground truth on what the browser actually
+    // negotiated with the camera, so framing decisions aren't made by
+    // guessing from screenshots. Updated ~3x/sec like the rest of this cache.
+    var dbg = document.getElementById('cameraDebugReadout');
+    if (dbg) {
+      if (video.videoWidth) {
+        var track = state.mediaStream && state.mediaStream.getVideoTracks()[0];
+        var settings = track && track.getSettings ? track.getSettings() : {};
+        var fps = settings.frameRate ? Math.round(settings.frameRate) : '?';
+        dbg.textContent = 'Raw feed: ' + video.videoWidth + '\u00d7' + video.videoHeight +
+          ' @ ' + fps + 'fps (' + (video.videoWidth / video.videoHeight).toFixed(2) + ':1)';
+      } else {
+        dbg.textContent = 'Raw feed: waiting for camera...';
+      }
+    }
+
     showShowName  = document.getElementById('tog-showname').classList.contains('on');
     showLiveBadge = document.getElementById('tog-livebadge').classList.contains('on');
     showTicker    = document.getElementById('tog-ticker').classList.contains('on');
