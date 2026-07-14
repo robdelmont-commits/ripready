@@ -970,20 +970,24 @@ body{
         Camera mounted sideways? Try 90° or 270° — whichever corrects it.
       </div>
 
+      <div class="overlay-row" style="margin-top:10px">
+        <span class="overlay-name">Lock Aspect Ratio</span>
+        <div class="toggle on" id="tog-cameralock" onclick="toggleCameraLock()"></div>
+      </div>
       <div class="size-slider-row" style="margin-top:10px">
         <label>Width</label>
         <input type="range" id="cameraWSlider" min="10" max="200" value="100"
-          style="flex:1" oninput="state.camera.w = this.value/100; document.getElementById('cameraWLabel').textContent = this.value + '%'">
+          style="flex:1" oninput="onCameraWSlider(this.value)">
         <label id="cameraWLabel">100%</label>
       </div>
       <div class="size-slider-row">
         <label>Height</label>
         <input type="range" id="cameraHSlider" min="10" max="200" value="100"
-          style="flex:1" oninput="state.camera.h = this.value/100; document.getElementById('cameraHLabel').textContent = this.value + '%'">
+          style="flex:1" oninput="onCameraHSlider(this.value)">
         <label id="cameraHLabel">100%</label>
       </div>
-      <div class="token-hint" style="margin-top:-4px">
-        Width and height stretch independently — same as dragging a corner in OBS without locking aspect ratio. Nothing gets cropped off; it just stretches to fill whatever box you set. Drag the camera on the preview to reposition it.
+      <div class="token-hint" style="margin-top:-4px" id="cameraLockHint">
+        Locked to your camera's true shape — resizing one side adjusts the other so nothing looks stretched or squished. Drag the camera on the preview to reposition it.
       </div>
       <button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="resetCameraPosition()">
         <i class="ti ti-refresh"></i> Reset Position
@@ -1269,12 +1273,16 @@ var state = {
   // Was hardcoded to 1.2 — now user-adjustable via the Ticker Speed slider.
   tickerSpeed: 1.2,
   drag: { active: false, slot: null, offsetX: 0, offsetY: 0 },
-  // Camera position/size — drag-to-move, independent Width/Height sliders
-  // (no aspect lock, matching OBS's default drag-resize behavior — stretch
-  // to fill the box rather than crop). x/y are the fractional top-left
-  // corner; w/h are fractions of canvas width/height. rotation corrects a
-  // physically sideways-mounted camera (0/90/180/270).
-  camera: { rotation: 0, x: 0, y: 0, w: 1, h: 1 },
+  // Camera position/size — drag-to-move, independent Width/Height sliders.
+  // x/y are the fractional top-left corner; w/h are fractions of canvas
+  // width/height. rotation corrects a physically sideways-mounted camera
+  // (0/90/180/270). lock=true (default) keeps the box at the camera's true
+  // negotiated aspect ratio when either slider moves, so the feed never
+  // stretches/squishes — matching how most sellers actually want their
+  // camera to look with zero manual correction. Unlock for free OBS-style
+  // independent stretch. sized=false until the camera's real aspect ratio
+  // is known and the box has been auto-fit to it at least once.
+  camera: { rotation: 0, x: 0, y: 0, w: 1, h: 1, lock: true, sized: false },
   // Web Audio mixer — combines mic + optional second input + music bed into
   // one MediaStreamTrack that replaces the raw mic track when publishing.
   // Built this way (rather than relying on OBS-style hardware mixing) so it
@@ -1395,6 +1403,12 @@ function startCamera() {
       startRenderLoop(video, canvas);
       // Capture canvas stream for IVS (replaces raw video track)
       state.canvasStream = canvas.captureStream(30);
+      // First time we ever learn this camera's real negotiated resolution,
+      // auto-fit the box to its true aspect ratio so first activation
+      // looks correct with zero manual adjustment. Only runs once per
+      // session — after that, whatever position/size the seller set (or
+      // Reset Position) is respected across camera switches/restarts.
+      if (!state.camera.sized) fitCameraToNativeAspect();
     };
 
     document.getElementById('camStartBtn').innerHTML = '<i class="ti ti-camera"></i> Camera On';
@@ -1470,25 +1484,122 @@ function switchCamera() {
   if(state.cameraActive) startCamera();
 }
 
-// ── CAMERA POSITION (rotation/zoom/pan) ──
+// ── CAMERA POSITION (rotation/zoom/pan/aspect-lock) ──
+var CAMERA_LOCK_HINT_ON = "Locked to your camera's true shape — resizing one side adjusts the other so nothing looks stretched or squished. Drag the camera on the preview to reposition it.";
+var CAMERA_LOCK_HINT_OFF = "Unlocked — width and height resize independently, so the image can stretch or squish. Turn the lock back on if things start looking distorted.";
+
+// Native width/height ratio of the camera as it will actually be drawn,
+// accounting for a 90/270 rotation swapping the effective orientation.
+// Returns null until the camera has actually negotiated a resolution.
+function cameraNativeAspect() {
+  var video = document.getElementById('cameraVideo');
+  if (!video || !video.videoWidth) return null;
+  var quarterTurn = (state.camera.rotation === 90 || state.camera.rotation === 270);
+  return quarterTurn ? (video.videoHeight / video.videoWidth) : (video.videoWidth / video.videoHeight);
+}
+
+// Recompute Height from the current Width slider to preserve native aspect.
+// No-op if the lock is off or the camera's real aspect isn't known yet.
+function applyLockFromWidth() {
+  if (!state.camera.lock) return;
+  var ar = cameraNativeAspect();
+  if (!ar) return;
+  var boxWpx = state.camera.w * 720;
+  var hFrac = (boxWpx / ar) / 1280;
+  state.camera.h = hFrac;
+  var hPct = Math.round(hFrac * 100);
+  document.getElementById('cameraHSlider').value = hPct;
+  document.getElementById('cameraHLabel').textContent = hPct + '%';
+}
+
+// Recompute Width from the current Height slider to preserve native aspect.
+function applyLockFromHeight() {
+  if (!state.camera.lock) return;
+  var ar = cameraNativeAspect();
+  if (!ar) return;
+  var boxHpx = state.camera.h * 1280;
+  var wFrac = (boxHpx * ar) / 720;
+  state.camera.w = wFrac;
+  var wPct = Math.round(wFrac * 100);
+  document.getElementById('cameraWSlider').value = wPct;
+  document.getElementById('cameraWLabel').textContent = wPct + '%';
+}
+
+function onCameraWSlider(val) {
+  state.camera.w = val / 100;
+  document.getElementById('cameraWLabel').textContent = val + '%';
+  applyLockFromWidth();
+}
+
+function onCameraHSlider(val) {
+  state.camera.h = val / 100;
+  document.getElementById('cameraHLabel').textContent = val + '%';
+  applyLockFromHeight();
+}
+
+function toggleCameraLock() {
+  state.camera.lock = !state.camera.lock;
+  document.getElementById('tog-cameralock').classList.toggle('on', state.camera.lock);
+  document.getElementById('cameraLockHint').textContent = state.camera.lock ? CAMERA_LOCK_HINT_ON : CAMERA_LOCK_HINT_OFF;
+  if (state.camera.lock) applyLockFromWidth();
+}
+
+// Centers the camera box on the canvas at its true negotiated aspect
+// ratio, sized as large as possible without exceeding either canvas
+// dimension (like CSS object-fit:contain). This is what first activation
+// and Reset Position both use now, instead of the old w:1,h:1 full-canvas
+// stretch that caused visible distortion the moment the camera turned on.
+function fitCameraToNativeAspect() {
+  var ar = cameraNativeAspect();
+  if (!ar) return false;
+  var CANVAS_W = 720, CANVAS_H = 1280;
+  var boxWpx = CANVAS_W, boxHpx = CANVAS_W / ar;
+  if (boxHpx > CANVAS_H) {
+    boxHpx = CANVAS_H;
+    boxWpx = CANVAS_H * ar;
+  }
+  state.camera.w = boxWpx / CANVAS_W;
+  state.camera.h = boxHpx / CANVAS_H;
+  state.camera.x = (CANVAS_W - boxWpx) / 2 / CANVAS_W;
+  state.camera.y = (CANVAS_H - boxHpx) / 2 / CANVAS_H;
+  state.camera.sized = true;
+  var wPct = Math.round(state.camera.w * 100), hPct = Math.round(state.camera.h * 100);
+  document.getElementById('cameraWSlider').value = wPct;
+  document.getElementById('cameraWLabel').textContent = wPct + '%';
+  document.getElementById('cameraHSlider').value = hPct;
+  document.getElementById('cameraHLabel').textContent = hPct + '%';
+  return true;
+}
+
 function setCameraRotation(deg) {
   state.camera.rotation = deg;
   [0, 90, 180, 270].forEach(function(d){
     document.getElementById('rot-' + d).classList.toggle('active', d === deg);
   });
+  // Rotating swaps the effective aspect ratio (quarter turns) — re-fit so
+  // a locked box doesn't end up distorted in the new orientation.
+  if (state.camera.lock) applyLockFromWidth();
 }
 
 function resetCameraPosition() {
   state.camera.rotation = 0;
-  state.camera.x = 0;
-  state.camera.y = 0;
-  state.camera.w = 1;
-  state.camera.h = 1;
+  state.camera.lock = true;
+  document.getElementById('tog-cameralock').classList.add('on');
+  document.getElementById('cameraLockHint').textContent = CAMERA_LOCK_HINT_ON;
   setCameraRotation(0);
-  document.getElementById('cameraWSlider').value = 100;
-  document.getElementById('cameraWLabel').textContent = '100%';
-  document.getElementById('cameraHSlider').value = 100;
-  document.getElementById('cameraHLabel').textContent = '100%';
+  if (!fitCameraToNativeAspect()) {
+    // Camera not active yet (e.g. reset before first Start Camera) —
+    // fall back to full-box placeholder; onloadedmetadata will fit
+    // properly once a real resolution is negotiated.
+    state.camera.x = 0;
+    state.camera.y = 0;
+    state.camera.w = 1;
+    state.camera.h = 1;
+    document.getElementById('cameraWSlider').value = 100;
+    document.getElementById('cameraWLabel').textContent = '100%';
+    document.getElementById('cameraHSlider').value = 100;
+    document.getElementById('cameraHLabel').textContent = '100%';
+  }
 }
 
 // ── AUDIO MIXER ──
@@ -1929,13 +2040,12 @@ function startRenderLoop(video, canvas) {
     if (frameCount % 10 === 0) refreshCache();
 
     // 1. Draw camera — positioned/sized like an image overlay (drag to move,
-    // slider to size), full sensor frame always shown, no crop, no stretch.
-    // This matches how OBS actually handles it: the source is placed at
-    // whatever size/position you want, native FOV intact, black fills the
-    // rest of the canvas. Previously this tried to force the camera to
-    // fill the entire 9:16 canvas edge-to-edge, which either cropped out
-    // most of the sensor's horizontal FOV or stretched the image to
-    // compensate — neither of which OBS ever required.
+    // slider to size). Full sensor frame always shown (never cropped);
+    // black fills whatever canvas space the box doesn't cover. Aspect-lock
+    // (default ON) keeps the box proportional to the camera's true
+    // negotiated resolution so it never looks stretched or squished — see
+    // fitCameraToNativeAspect() for the first-activation default and
+    // applyLockFromWidth/Height() for the live slider math.
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, w, h);
     if (video.videoWidth) {
@@ -2053,14 +2163,12 @@ function drawPositionedImage(ctx, img, imgState, w, h) {
 }
 
 // Draw the camera at a stored fractional position/size — drag to move,
-// sliders to size, same interaction pattern as the image overlays. Unlike
-// drawPositionedImage, width and height are independent (no aspect lock),
-// so the video STRETCHES to fill the box exactly rather than being
-// cropped to preserve aspect ratio. This matches OBS's actual default
-// behavior when you resize a source by dragging a corner/edge without
-// holding the aspect-lock modifier — which is what most people do, and
-// why an OBS camera box "just looks right" without ever needing to crop
-// content off the sides.
+// sliders to size, same interaction pattern as the image overlays. The
+// box is drawn by stretching the source into camState.w/h exactly (no
+// cropping). With the aspect-ratio lock ON (default — see
+// applyLockFromWidth/Height), the UI keeps w/h at the camera's true
+// negotiated ratio so this stretch is never visually distorting; the
+// lock can be turned off for free OBS-style independent resizing.
 function drawPositionedVideo(ctx, video, camState, w, h) {
   var vw = video.videoWidth, vh = video.videoHeight;
   var rot = camState.rotation || 0;
