@@ -7,6 +7,29 @@ const SUPABASE_URL = "https://lomcfdnjyoujtwbuvexb.supabase.co";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 const server = http.createServer((req, res) => {
+  // Phase 1 (local relay): the local relay running on a seller's own
+  // machine extracts the bearer token via the OBS WebSocket protocol but
+  // never holds SUPABASE_SERVICE_KEY itself (that key has full delete/write
+  // access and must never leave Railway). It POSTs just the token here
+  // instead, and this endpoint does the exact same saveToken() write the
+  // WebSocket path below already does.
+  if (req.method === "POST" && req.url === "/submit-token") {
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", async () => {
+      let parsed;
+      try { parsed = JSON.parse(body); } catch {
+        res.writeHead(400); res.end("Bad JSON"); return;
+      }
+      const token = parsed?.token;
+      if (!token) { res.writeHead(400); res.end("Missing token"); return; }
+      console.log("[RipReady] Token received via /submit-token (local relay)");
+      await saveToken(token);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    });
+    return;
+  }
   res.writeHead(200);
   res.end("RipReady relay running");
 });
